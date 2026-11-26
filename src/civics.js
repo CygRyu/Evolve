@@ -10,7 +10,7 @@ import { jobScale } from './jobs.js';
 import { templeCount } from './actions.js';
 import { astrologySign, astroVal } from './seasons.js';
 import { warhead } from './resets.js';
-import { yokiBattle } from './silverblood.js';
+import { yokiBattle, abyssCombatBonus } from './silverblood.js';
 
 // Sets up government in civics tab
 export function defineGovernment(define){
@@ -2195,6 +2195,17 @@ export function armyRating(val,type,wound,analysis){
             let yoki = (traits.yoki_power.vars()[0] / 100);
             army *= 1 + yoki;
             data.push({ k: 'trait_yoki_power_name', v: yoki });
+            let abyss = abyssCombatBonus();
+            if (abyss > 0){
+                army *= 1 + abyss;
+                data.push({ k: 'abyssal_bd', v: abyss });
+            }
+        }
+        let silverFathom = fathomCheck('silverblood');
+        if (silverFathom > 0){
+            let yoki = (traits.yoki_power.vars(1)[0] / 100 * silverFathom);
+            army *= 1 + yoki;
+            data.push({ k: 'trait_yoki_power_thrall', v: yoki });
         }
         if (global.race['claws']){
             let claws = (traits.claws.vars()[0] / 100);
@@ -2295,6 +2306,11 @@ export function armyRating(val,type,wound,analysis){
             let rage = planetTraits.rage.vars()[0];
             army *= rage;
             data.push({ k: 'planet_rage_bd', v: rage - 1 });
+        }
+        if (global.city.ptrait.includes('infested')){
+            let hardened = planetTraits.infested.vars()[0];
+            army *= hardened;
+            data.push({ k: 'planet_infested_bd', v: hardened - 1 });
         }
         if (global.race['elemental']){
             let elemental = (traits.elemental.vars()[5] / 100);

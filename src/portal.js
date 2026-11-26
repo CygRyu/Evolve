@@ -5021,7 +5021,7 @@ function addHellEnemy(type = [], allowRecursion = true, allowRepeat = false){
         });
     }
     if (type.includes('rare')){
-        ['ghast','shoggoth','dwarf','raccoon','lichen','wyvern','beholder','djinn','narwhal','bombardier','nephilim'].forEach(function(r){
+        ['ghast','shoggoth','dwarf','raccoon','lichen','wyvern','beholder','djinn','narwhal','bombardier','nephilim','silverblood'].forEach(function(r){
             if (allowRepeat || (!global.portal.throne.spawned.includes(r) && ![global.race.gods,global.race.old_gods,global.race.origin].includes(r))){
                 if (!current.includes(r)){ invaders.push(r); }
             }

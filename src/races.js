@@ -6309,7 +6309,7 @@ export const races = {
         },
         fanaticism: 'yoki_power',
         unlocked(){ return true; }, // Expansion: selectable without Mass Extinction
-        basic(){ return false; }
+        basic(){ return true; } // can appear as surface dwellers (thralls)
     },
     hellspawn: {
         name: loc('race_hellspawn'),
@@ -8129,6 +8129,14 @@ export const planetTraits = {
     retrograde: {
         label: loc('planet_retrograde'),
         desc: loc('planet_retrograde_desc')
+    },
+    infested: { // Expansion: Monster-infested world
+        label: loc('planet_infested'),
+        desc: loc('planet_infested_desc'),
+        vars(){
+            return global.race['rejuvenated'] ? [1.08,900] : [1.05,600];
+        }, // [Combat, Average seconds between demon raids]
+        wiki: ['%','A']
     },
     kamikaze: {
         label: loc('planet_kamikaze'),

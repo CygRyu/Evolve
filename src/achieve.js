@@ -14,7 +14,8 @@ const achieve_list = {
         'laser_shark','infested','mass_starvation','colonist','world_domination','illuminati',
         'syndicate','cult_of_personality','doomed','pandemonium','blood_war','landfill','seeder',
         'miners_dream','shaken','blacken_the_sun','trade','resonance','enlightenment','gladiator',
-        'corrupted','red_dead','godslayer','traitor','doppelganger'
+        'corrupted','red_dead','godslayer','traitor','doppelganger',
+        'silver_hunter','unbroken','abyss_walker' // Expansion
     ],
     species: [
         'mass_extinction','extinct_human','extinct_elven','extinct_orc','extinct_cath','extinct_wolven','extinct_vulpine','extinct_centaur',
@@ -40,7 +41,8 @@ const achieve_list = {
         'explorer','biome_grassland','biome_oceanic','biome_forest','biome_desert','biome_volcanic','biome_tundra',
         'biome_savanna','biome_swamp','biome_ashland','biome_taiga','biome_hellscape','biome_eden',
         'atmo_toxic','atmo_mellow','atmo_rage','atmo_stormy','atmo_ozone','atmo_magnetic','atmo_trashed','atmo_elliptical','atmo_flare','atmo_dense',
-        'atmo_unstable','atmo_permafrost','atmo_retrograde','atmo_kamikaze'
+        'atmo_unstable','atmo_permafrost','atmo_retrograde','atmo_kamikaze',
+        'atmo_infested' // Expansion
     ],
     universe: [
         'vigilante','squished','double_density','cross','macro','marble','heavyweight','whitehole','heavy','canceled',
@@ -285,6 +287,11 @@ export const feats = {
         name: loc("feat_fool_name"),
         desc: loc("feat_fool_desc"),
         flair: loc("feat_fool_flair")
+    },
+    abyssal_purge: { // Expansion
+        name: loc("feat_abyssal_purge_name"),
+        desc: loc("feat_abyssal_purge_desc"),
+        flair: loc("feat_abyssal_purge_flair")
     }
 }
 

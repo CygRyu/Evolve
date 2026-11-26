@@ -18,7 +18,7 @@ import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js'
 import { bioseed } from './resets.js';
 import { loadTab } from './index.js';
 import { modRaceKeys } from './mods.js';
-import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars } from './silverblood.js';
+import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt } from './silverblood.js';
 
 export const actions = {
     evolution: {
@@ -2068,6 +2068,20 @@ export const actions = {
             cost: {},
             effect(){ return yokiHuntEffect(); },
             action(args){ return yokiHunt(); }
+        },
+        abyss_hunt: { // Expansion: Silverblood endgame
+            id: 'city-abyss_hunt',
+            title(){ return abyssTitle(); },
+            desc: loc('city_abyss_hunt_desc'),
+            category: 'military',
+            reqs: { portal: 2 },
+            trait: ['yoki_power'],
+            not_trait: ['cataclysm','lone_survivor'],
+            condition(){ return abyssAvailable(); },
+            queue_complete(){ return 0; },
+            cost: {},
+            effect(){ return abyssEffect(); },
+            action(args){ return abyssHunt(); }
         },
         hospital: {
             id: 'city-hospital',
@@ -7035,6 +7049,11 @@ function buildPlanet(aspect,opt,args){
                 case 13:
                     if (!trait.includes('kamikaze')){
                         trait.push('kamikaze');
+                    }
+                    break;
+                case 14: // Expansion
+                    if (!trait.includes('infested')){
+                        trait.push('infested');
                     }
                     break;
                 default:

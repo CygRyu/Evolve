@@ -14,7 +14,7 @@ import { asphodelResist, mechStationEffect, renderEdenic } from './edenic.js';
 import { renderTauCeti, syndicate, shipFuelUse, spacePlanetStats, genXYcoord, shipCrewSize, tpStorageMultiplier, tritonWar, sensorRange, erisWar, calcAIDrift, drawMap, tauEnabled, shipCosts, buildTPShipQueue } from './truepath.js';
 import { arpa, buildArpa, sequenceLabs } from './arpa.js';
 import { events, eventList } from './events.js';
-import { yokiTick, yokiStress, awakeningLabel, awakeningTooltip } from './silverblood.js';
+import { yokiTick, yokiStress, awakeningLabel, awakeningTooltip, infestedTick } from './silverblood.js';
 import { defineGovernor, govern, govActive, removeTask } from './governor.js';
 import { production, highPopAdjust, teamster, factoryBonus } from './prod.js';
 import { swissKnife } from './tech.js';
@@ -8144,6 +8144,7 @@ function fastLoop(){
 function midLoop(){
     const astroSign = astrologySign();
     yokiTick();
+    infestedTick();
     if (global.race.species === 'protoplasm'){
         let base = 100;
         if (global.stats.achieve['mass_extinction'] && global.stats.achieve['mass_extinction'].l > 1){
