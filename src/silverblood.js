@@ -266,6 +266,7 @@ function currentAbyss(){
 }
 
 export function abyssTitle(){
+    if (!yokiActive()){ return loc('city_abyss_hunt_generic'); }
     let ab = yokiState().abyss;
     return loc('city_abyss_hunt',[loc(`abyssal_${Math.min(ab.slain, abyssVars.hp.length - 1)}`)]);
 }

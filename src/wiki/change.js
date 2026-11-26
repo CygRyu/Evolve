@@ -2,6 +2,22 @@ import {} from './../vars.js';
 import { clearElement } from './../functions.js';
 
 export const changeList = [
+    { // Fan expansion (not part of the official game)
+        version: `1.4.10`,
+        revision: ` Silverblood Expansion v1.0`,
+        date: `11/27/2026`,
+        changes: [
+            `Fan expansion inspired by Claymore. Not made by the official developer.`,
+            `New race: Silverblood (humanoid). Traits: Demon Power and Outcast. Selectable from your first run.`,
+            `Awakening meter: Silverblood soldiers build it up. At 100% a warrior Awakens into a monster that must be hunted.`,
+            `New building: The Organization. New job: Handler. New action: Hunt the Awakened.`,
+            `Endgame: hunt the five Abyssal Ones after building a fortress in Hell.`,
+            `New planet trait: Monster-infested (+5% combat, periodic demon raids).`,
+            `Silverbloods can appear as Hell invaders (Warlord) and as thralls.`,
+            `New achievements: Silver Hunter, Unbroken, Abyss Walker, Beast Country. New feat: The Last Abyssal.`,
+            `Mod packs: install JSON files from Settings to add new races.`
+        ]
+    },
     {
         version: `1.4.10`,
         date: `6/19/2026`,

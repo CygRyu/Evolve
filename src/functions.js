@@ -3307,6 +3307,10 @@ export function hoovedRename(style, species=global.race.species){
 }
 
 const traitExtra = {
+    yoki_power: [ // Expansion
+        loc(`wiki_trait_effect_yoki_power_ex1`),
+        loc(`wiki_trait_effect_yoki_power_ex2`),
+    ],
     infiltrator: [
         loc(`wiki_trait_effect_infiltrator_ex1`),
         loc(`wiki_trait_effect_infiltrator_ex2`,[

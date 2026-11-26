@@ -2033,10 +2033,12 @@ export const actions = {
                 Stone(offset){ return costMultiplier('organization', offset, 250, 1.32); },
                 Furs(offset){ return costMultiplier('organization', offset, 40, 1.32); }
             },
-            effect(){
+            effect(args){
+                let desc = `<div>${loc('city_organization_effect',[yokiVars.orgCalm])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div>`;
+                if (args && args.isWiki){ return desc; }
                 let a = yokiState();
                 let r = yokiRates();
-                return `<div>${loc('city_organization_effect',[yokiVars.orgCalm])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div><div class="has-text-caution">${loc('city_organization_effect2',[Math.floor(a.m), (r.net >= 0 ? '+' : '') + r.net.toFixed(2)])}</div>`;
+                return desc + `<div class="has-text-caution">${loc('city_organization_effect2',[Math.floor(a.m), (r.net >= 0 ? '+' : '') + r.net.toFixed(2)])}</div>`;
             },
             action(args){
                 if (payCosts($(this)[0])){
@@ -2066,7 +2068,7 @@ export const actions = {
             condition(){ return yokiState().boss > 0; },
             queue_complete(){ return 0; },
             cost: {},
-            effect(){ return yokiHuntEffect(); },
+            effect(args){ return args && args.isWiki ? '' : yokiHuntEffect(); },
             action(args){ return yokiHunt(); }
         },
         abyss_hunt: { // Expansion: Silverblood endgame
@@ -2080,7 +2082,7 @@ export const actions = {
             condition(){ return abyssAvailable(); },
             queue_complete(){ return 0; },
             cost: {},
-            effect(){ return abyssEffect(); },
+            effect(args){ return args && args.isWiki ? '' : abyssEffect(); },
             action(args){ return abyssHunt(); }
         },
         hospital: {

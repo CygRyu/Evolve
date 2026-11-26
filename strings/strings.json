@@ -11726,5 +11726,13 @@
   "abyssal_3": "Vethra, the Weeping Spire",
   "abyssal_3_desc": "A tower of flesh that sings in the voices of the dead.",
   "abyssal_4": "Ul-Abyss, the First Dark",
-  "abyssal_4_desc": "The demon whose blood made the Silverbloods. All Awakening leads back to it."
+  "abyssal_4_desc": "The demon whose blood made the Silverbloods. All Awakening leads back to it.",
+  "city_abyss_hunt_generic": "Hunt the Abyssal Ones",
+  "wiki_structure_planetary_silverblood_only": "Only available to races with the Demon Power trait (Silverblood).",
+  "wiki_structure_planetary_organization": "Each Organization lowers the Awakening meter by 0.03% per second and allows one Handler. Each Handler lowers it by a further 0.06% per second.",
+  "wiki_structure_planetary_hunt_awakened": "Appears while an Awakened One is at large. Your army rating (with 80% to 120% luck) is compared to the monster's strength. Win: the monster dies and pays a bounty (doubled on Monster-infested planets). Lose: you lose soldiers, but the monster is 20% weaker for the next attempt.",
+  "wiki_structure_planetary_abyss_hunt": "Unlocked once you build a fortress in Hell. Each expedition deals damage equal to your army rating (with luck) and costs a share of your soldiers. Your army needs 60 seconds to regroup between expeditions. Each Abyssal One slain gives +5% combat rating and 10% slower Awakening for the rest of the run, and fills your treasury.",
+  "wiki_structure_planetary_abyss_hunt_list": "The Abyssal Ones, in order: Morvaine, the Hollow King (4,000 health); Seskari of the Drowned Deep (9,000); The Pale Wolf of Ironwood (18,000); Vethra, the Weeping Spire (36,000); Ul-Abyss, the First Dark (75,000).",
+  "wiki_trait_effect_yoki_power_ex1": "Soldiers slowly fill the Awakening meter (wounded soldiers faster, and each offensive campaign adds 4%). At 100% a warrior Awakens into a monster that kills soldiers and adds stress until it is hunted down. Up to 3 can be at large at once.",
+  "wiki_trait_effect_yoki_power_ex2": "The Organization building and the Handler job hold the meter back. After building a fortress in Hell, you can hunt the five Abyssal Ones."
 }

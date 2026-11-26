@@ -41,6 +41,9 @@ const extraInformation = {
     prehistoric: {},
     planetary: {
         slaughter: [loc(`wiki_structure_planetary_slaughter`)],
+        organization: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_organization`)],
+        hunt_awakened: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_hunt_awakened`)],
+        abyss_hunt: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_abyss_hunt`), loc(`wiki_structure_planetary_abyss_hunt_list`)],
     },
     space: {
         terraformer: [loc(`wiki_structure_space_terraformer`)],
@@ -73,7 +76,7 @@ const calcInfo = {
         prehistoric: ['membrane','organelles','nucleus','eukaryotic_cell','mitochondria']
     },
     exclude: { // Things that are one-offs, disappearing after they're clicked. Automatically excludes creep. Does not add a calculator.
-        planetary: ['food','lumber','stone','chrysotile','slaughter','slave_market',''],
+        planetary: ['food','lumber','stone','chrysotile','slaughter','slave_market','hunt_awakened','abyss_hunt',''],
         space: ['test_launch','moon_mission','terraform','red_mission','hell_mission','sun_mission','gas_mission','gas_moon_mission','belt_mission','dwarf_mission','titan_mission','enceladus_mission','triton_mission','kuiper_mission','eris_mission','crashed_ship','digsite'],
         starDock: ['prep_ship','launch_ship'],
         interstellar: ['alpha_mission','proxima_mission','nebula_mission','neutron_mission','blackhole_mission','jump_ship','wormhole_mission','sirius_mission','sirius_b','ascend'],

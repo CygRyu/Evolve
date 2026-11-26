@@ -1,4 +1,75 @@
-# Evolve
+# Evolve: Silverblood Expansion
+
+A fan-made expansion for [Evolve](https://github.com/pmotschmann/Evolve) by Demagorddon, inspired by the anime and manga *Claymore*. It adds a new race with its own gameplay loop, a new planet type, an endgame boss hunt, new achievements and support for community mod packs.
+
+**This is not the official game.** For the original, see https://pmotschmann.github.io/Evolve/
+
+## Play
+
+https://cygryu.github.io/Evolve/
+
+## What's new
+
+**Silverblood, a new race**
+Humans infused with demon flesh: elite warriors who are slowly becoming the monsters they hunt. Silverblood is a humanoid race and can be picked on the evolution screen from your very first run.
+
+- **Demon Power:** +25% combat rating, but your soldiers build up the Awakening meter.
+- **Outcast:** your citizens fear the warriors who protect them, so the army causes more stress.
+
+**The Awakening meter**
+- Shown beside Morale. Soldiers fill it slowly, wounded soldiers faster, and every battle adds to it.
+- At 100%, a warrior Awakens into a monster that kills soldiers and adds stress until you hunt it down with **Hunt the Awakened**.
+- **The Organization** (a new building) and **Handlers** (a new job) hold the meter back.
+
+**Endgame: the Abyssal Ones**
+After building a fortress in Hell, Silverbloods can hunt five ancient Awakened, each stronger than the last. Every kill makes your army stronger for the rest of the run.
+
+**Monster-infested planets**
+A new planet trait that can appear for any race: +5% combat, but demons raid your settlements.
+
+**And also**
+- Silverbloods can appear as Hell invaders (Warlord mode) and as thralls.
+- New achievements: Silver Hunter, Unbroken, Abyss Walker and Beast Country, plus the feat The Last Abyssal.
+- **Mod packs:** install JSON files from Settings to add your own races. See [MODDING.md](MODDING.md).
+
+Everything is documented in the in-game wiki.
+
+## Bringing your save from the original game
+
+Saves don't carry over automatically, because each website keeps its own saves.
+
+1. In the original game, go to **Settings** and use **Export Game** (or **Save as File**).
+2. Here, go to **Settings**, paste it into the Import/Export box and click **Import Game**.
+
+Your progress carries over and the new content switches on as you play.
+
+> **Warning:** moving a save the other way, from this expansion back to the original game, can break it if the save uses Silverblood, a Monster-infested planet or the new achievements. Keep a copy of your original export if you might want to go back.
+
+## Feedback and bugs
+
+Please report problems with the expansion as [issues on this repository](https://github.com/cygryu/Evolve/issues), **not** on the official Evolve repository. The official developer isn't responsible for this content.
+
+## Building
+
+The original game's `npm run build` command fails on newer Node.js versions. Run the steps one at a time instead:
+
+```
+npm install
+npm run evolve
+npm run evolve-less
+npm run wiki
+npm run wiki-less
+```
+
+See [TESTING.md](TESTING.md) for a playtesting checklist.
+
+## Credits and license
+
+Evolve is created by Peter Motschmann (Demagorddon) and its contributors, and licensed under the [Mozilla Public License 2.0](LICENSE). This expansion is released under the same license. *Claymore* is the work of Norihiro Yagi. This is an unofficial fan project; all names in the expansion are original.
+
+---
+
+# Original Evolve README
 
 ## Play
 
