@@ -1,0 +1,1152 @@
+From dbf45e37efadf178ca72071f167c96085c52eb5c Mon Sep 17 00:00:00 2001
+From: Evolve Expansion <expansion@example.com>
+Date: Fri, 27 Nov 2026 00:01:37 +0700
+Subject: [PATCH] Evolve expansion: Silverblood race, Awakening system and mod
+ packs
+
+- New humanoid race Silverblood with traits Demon Power and Outcast
+- Awakening meter: soldiers build it up; at 100% an Awakened One appears,
+  kills soldiers and adds stress until hunted down
+- The Organization building and Handler job hold the meter back
+- Hunt the Awakened action with bounty on success
+- Mod pack loader: install JSON packs from Settings to add races
+- MODDING.md guide and example starter pack
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016HmsZNbhLtGaJpfe2FaNeB
+---
+ MODDING.md                     |  72 ++++++++++
+ mods/example-starter-pack.json |  39 ++++++
+ src/achieve.js                 |   5 +-
+ src/actions.js                 |  59 +++++++-
+ src/civics.js                  |   7 +
+ src/index.js                   |  62 ++++++++-
+ src/jobs.js                    |   4 +
+ src/locale.js                  |   8 ++
+ src/main.js                    |  17 +++
+ src/mods.js                    | 244 +++++++++++++++++++++++++++++++++
+ src/races.js                   |  95 +++++++++++++
+ src/silverblood.js             | 182 ++++++++++++++++++++++++
+ strings/strings.json           |  46 ++++++-
+ 13 files changed, 835 insertions(+), 5 deletions(-)
+ create mode 100644 MODDING.md
+ create mode 100644 mods/example-starter-pack.json
+ create mode 100644 src/mods.js
+ create mode 100644 src/silverblood.js
+
+diff --git a/MODDING.md b/MODDING.md
+new file mode 100644
+index 0000000..2cb0ffc
+--- /dev/null
++++ b/MODDING.md
+@@ -0,0 +1,72 @@
++# Evolve Expansion: Mod Packs
++
++Players can install **mod packs**: JSON files that add new races. Mod packs work like a small Steam Workshop. Go to **Settings → Mod Packs (Workshop) → Install Mod Pack**, pick a `.json` file, and the game reloads with the new content.
++
++A working example is in [`mods/example-starter-pack.json`](mods/example-starter-pack.json).
++
++## Pack format
++
++```json
++{
++  "format": 1,
++  "id": "starter_pack",
++  "name": "Starter Pack",
++  "version": "1.0.0",
++  "author": "You",
++  "races": {
++    "lumari": {
++      "name": "Lumari",
++      "desc": "One-sentence description shown when evolving.",
++      "entity": "luminous cave folk",
++      "home": "Glimmerdeep",
++      "genus": "humanoid",
++      "traits": { "studious": 1, "nyctophilia": 1 },
++      "fanaticism": "studious",
++      "solar": { "red": "...", "hell": "...", "gas": "...", "gas_moon": "...", "dwarf": "..." },
++      "extinct": { "name": "Lights Out", "desc": "...", "flair": "..." }
++    }
++  },
++  "strings": { "any_existing_string_key": "Override text" }
++}
++```
++
++| Field | Required | Notes |
++|---|---|---|
++| `id` | yes | Unique pack id. Installing a pack with the same id replaces the old one. |
++| `races.<key>` | | The race id: lowercase letters, numbers or `_`, 3–24 characters. It must not clash with a base-game race. |
++| `genus` | yes | `humanoid`, `carnivore`, `herbivore`, `small`, `giant`, `reptilian`, `avian`, `insectoid`, `plant`, `fungi`, `aquatic`, `fey`, `heat`, `polar`, `sand`, `demonic`, `angelic`, `eldritch`. |
++| `traits` | yes | 1–4 existing **major** traits. Each takes a rank of 0.1, 0.25, 0.5, 1, 2, 3 or 4. |
++| `fanaticism` | | The trait boosted by the Fanaticism tech. Defaults to the first trait. |
++| `solar`, `extinct`, `desc`, `home`, `entity` | | Optional flavour text. Sensible defaults are generated. |
++
++## How mod races appear
++
++Mod races behave like normal races. They appear on the evolution screen once you reach their genus, if you have the *Mass Extinction* achievement, are seeded, or have already played that race. Otherwise they can roll as the random result of **Sentience**. Each mod race also gets its own extinction achievement.
++
++## Safety rules
++
++- Text is stripped of `<` and `>`, so packs can't inject HTML.
++- Invalid races are skipped and logged to the console instead of breaking the game.
++- You can't remove a pack while you're playing one of its races. If a pack goes missing anyway, the save still loads with a placeholder race.
++
++## Code map (for contributors)
++
++- `src/mods.js` handles loading, validation, strings and install/remove.
++- `src/races.js` calls `registerModRaces()` after the base races are defined.
++- `src/actions.js` adds mod races to `raceList`, so they show up in evolution and Sentience.
++- `src/achieve.js` adds the extinction achievements.
++- `src/locale.js` merges the generated strings.
++- `src/index.js` holds the Settings UI.
++
++Next steps could be custom traits (effects scripted from a whitelist of hooks), custom events and custom planet types.
++
++## Expansion content: Silverblood
++
++This content is built into the game, not part of a mod pack. The code is in `src/silverblood.js`, with small hooks in other files.
++
++- **Race:** Silverblood (humanoid). Traits: Demon Power, Outcast, and half-rank Regenerative.
++- **Awakening meter**, shown beside Morale. Healthy soldiers fill it slowly, wounded soldiers faster, and each offensive campaign adds 4%. At 100% a warrior becomes an **Awakened One** and the meter drops to 25%. At most 3 can be loose at once.
++- Each Awakened One sometimes kills a soldier and adds 3 stress.
++- **Hunt the Awakened** (Military Complex): your army rating, with some luck, is compared to the monster's strength. A win kills the monster and pays a bounty. A loss costs soldiers but weakens the monster by 20%.
++- **The Organization** (Military Complex): lowers the meter by 0.03% per second and adds one **Handler** job slot. Each Handler lowers it by a further 0.06% per second.
++- Tuning numbers are in `yokiVars` at the top of `src/silverblood.js`.
+diff --git a/mods/example-starter-pack.json b/mods/example-starter-pack.json
+new file mode 100644
+index 0000000..1b48c27
+--- /dev/null
++++ b/mods/example-starter-pack.json
+@@ -0,0 +1,39 @@
++{
++  "format": 1,
++  "id": "starter_pack",
++  "name": "Starter Pack",
++  "version": "1.0.0",
++  "author": "Evolve Expansion",
++  "races": {
++    "lumari": {
++      "name": "Lumari",
++      "desc": "Lumari are glowing cave-dwellers who read by their own light and fear the open sun.",
++      "entity": "luminous cave folk",
++      "home": "Glimmerdeep",
++      "genus": "humanoid",
++      "traits": { "studious": 1, "nyctophilia": 1 },
++      "fanaticism": "studious",
++      "solar": {
++        "red": "Emberglow",
++        "hell": "Duskfire",
++        "gas": "Mistlight",
++        "gas_moon": "Moonwick",
++        "dwarf": "Faintstar"
++      },
++      "extinct": {
++        "name": "Lights Out",
++        "desc": "Led a Lumari civilization to destruction.",
++        "flair": "Darkness returns"
++      }
++    },
++    "ironhide": {
++      "name": "Ironhide",
++      "desc": "Ironhides are hulking beasts with plated skin, slow to think but nearly impossible to wound.",
++      "entity": "armored brutes",
++      "home": "Rustvale",
++      "genus": "giant",
++      "traits": { "armored": 1, "tough": 1, "dumb": 1 },
++      "fanaticism": "armored"
++    }
++  }
++}
+diff --git a/src/achieve.js b/src/achieve.js
+index 72c45c3..eaf5143 100644
+--- a/src/achieve.js
++++ b/src/achieve.js
+@@ -5,6 +5,7 @@ import { actions } from './actions.js';
+ import { universe_affixes, universe_types, piracy } from './space.js';
+ import { monsters } from './portal.js';
+ import { loc } from './locale.js'
++import { modRaceKeys } from './mods.js';
+ 
+ const achieve_list = {
+     misc: [
+@@ -25,7 +26,9 @@ const achieve_list = {
+         'extinct_satyr','extinct_phoenix','extinct_salamander','extinct_yeti','extinct_wendigo','extinct_tuskin','extinct_kamel','extinct_balorg',
+         'extinct_imp','extinct_seraph','extinct_unicorn','extinct_synth','extinct_nano','extinct_ghast','extinct_shoggoth','extinct_dwarf',
+         'extinct_raccoon','extinct_lichen','extinct_wyvern','extinct_beholder','extinct_djinn','extinct_narwhal','extinct_bombardier','extinct_nephilim',
+-        'extinct_junker','extinct_sludge','extinct_ultra_sludge','extinct_custom','extinct_hybrid'
++        'extinct_junker','extinct_sludge','extinct_ultra_sludge','extinct_custom','extinct_hybrid',
++        'extinct_silverblood',
++        ...modRaceKeys.map(r => `extinct_${r}`)
+     ],
+     genus: [
+         'creator','genus_humanoid','genus_carnivore','genus_herbivore','genus_small','genus_giant','genus_reptilian','genus_avian',
+diff --git a/src/actions.js b/src/actions.js
+index 558c045..1e9f258 100644
+--- a/src/actions.js
++++ b/src/actions.js
+@@ -17,6 +17,8 @@ import { techList, techPath } from './tech.js';
+ import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js';
+ import { bioseed } from './resets.js';
+ import { loadTab } from './index.js';
++import { modRaceKeys } from './mods.js';
++import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars } from './silverblood.js';
+ 
+ export const actions = {
+     evolution: {
+@@ -899,7 +901,7 @@ export const actions = {
+                     else {
+                         for (let idx in raceList){
+                             let id = raceList[idx];
+-                            if (races[id].type === type){
++                            if (races[id] && races[id].type === type){
+                                 allowed.push(id);
+                             }
+                         }
+@@ -917,7 +919,7 @@ export const actions = {
+             emblem(){
+                 for (let idx in raceList){
+                     let id = raceList[idx];
+-                    if (global.tech[`evo_${races[id].type}`] && global.tech[`evo_${races[id].type}`] >= 2){
++                    if (races[id] && global.tech[`evo_${races[id].type}`] && global.tech[`evo_${races[id].type}`] >= 2){
+                         return format_emblem(`genus_${races[id].type}`);
+                     }
+                 }
+@@ -2018,6 +2020,55 @@ export const actions = {
+                 return jobScale(soldiers);
+             }
+         },
++        organization: { // Expansion: Silverblood
++            id: 'city-organization',
++            title: loc('city_organization'),
++            desc: loc('city_organization_desc'),
++            category: 'military',
++            reqs: { military: 1 },
++            trait: ['yoki_power'],
++            not_trait: ['cataclysm','lone_survivor'],
++            cost: {
++                Money(offset){ return costMultiplier('organization', offset, 350, 1.32); },
++                Stone(offset){ return costMultiplier('organization', offset, 250, 1.32); },
++                Furs(offset){ return costMultiplier('organization', offset, 40, 1.32); }
++            },
++            effect(){
++                let a = yokiState();
++                let r = yokiRates();
++                return `<div>${loc('city_organization_effect',[yokiVars.orgCalm])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div><div class="has-text-caution">${loc('city_organization_effect2',[Math.floor(a.m), (r.net >= 0 ? '+' : '') + r.net.toFixed(2)])}</div>`;
++            },
++            action(args){
++                if (payCosts($(this)[0])){
++                    incrementStruct('organization','city');
++                    if (!global.civic.handler.display){
++                        global.civic.handler.display = true;
++                    }
++                    return true;
++                }
++                return false;
++            },
++            struct(){
++                return {
++                    d: { count: 0 },
++                    p: ['organization','city']
++                };
++            }
++        },
++        hunt_awakened: { // Expansion: Silverblood
++            id: 'city-hunt_awakened',
++            title: loc('city_hunt_awakened'),
++            desc: loc('city_hunt_awakened_desc'),
++            category: 'military',
++            reqs: { military: 1 },
++            trait: ['yoki_power'],
++            not_trait: ['cataclysm','lone_survivor'],
++            condition(){ return yokiState().boss > 0; },
++            queue_complete(){ return 0; },
++            cost: {},
++            effect(){ return yokiHuntEffect(); },
++            action(args){ return yokiHunt(); }
++        },
+         hospital: {
+             id: 'city-hospital',
+             title(){ return structName('hospital'); },
+@@ -5155,6 +5206,8 @@ const raceList = [
+     'synth','nano',
+     'ghast','shoggoth',
+     'dwarf','raccoon','lichen','wyvern','beholder','djinn','narwhal','bombardier','nephilim',
++    'silverblood', // Expansion races
++    ...modRaceKeys,
+     'custom','hybrid'
+ ];
+ raceList.forEach(function(race){
+@@ -5171,6 +5224,7 @@ raceList.forEach(function(race){
+             reqs: { evo: 7 },
+             grant: ['evo',8],
+             condition(){
++                if (!races[race]){ return false; } // invalid mod race
+                 let typeList = global.stats.achieve['godslayer'] && races[race].type === 'hybrid' ? races[race].hybrid : [races[race].type];
+                 let typeCheck = false;
+                 typeList.forEach(function(t){
+@@ -5223,6 +5277,7 @@ if (Object.keys(global.stats.synth).length > 1){
+             if ((race === 'custom' && !global.custom.hasOwnProperty('race0')) || (race === 'hybrid' && !global.custom.hasOwnProperty('race1'))){
+                 return false;
+             }
++            if (!races[race]){ return false; } // invalid mod race
+             return (global.stats.synth[race] || global['beta']) && global.race['evoFinalMenu'];
+         },
+         cost: {},
+diff --git a/src/civics.js b/src/civics.js
+index 5155e32..0a1c0f6 100644
+--- a/src/civics.js
++++ b/src/civics.js
+@@ -10,6 +10,7 @@ import { jobScale } from './jobs.js';
+ import { templeCount } from './actions.js';
+ import { astrologySign, astroVal } from './seasons.js';
+ import { warhead } from './resets.js';
++import { yokiBattle } from './silverblood.js';
+ 
+ // Sets up government in civics tab
+ export function defineGovernment(define){
+@@ -1570,6 +1571,7 @@ function war_campaign(gov){
+         return;
+     }
+     global.stats.attacks++;
++    yokiBattle();
+ 
+     let highLuck = global.race['claws'] ? 20 : 16;
+     let lowLuck = global.race['puny'] ? 3 : 5;
+@@ -2189,6 +2191,11 @@ export function armyRating(val,type,wound,analysis){
+             army *= 1 - puny;
+             data.push({ k: 'trait_puny_name', v: -(puny) });
+         }
++        if (global.race['yoki_power']){
++            let yoki = (traits.yoki_power.vars()[0] / 100);
++            army *= 1 + yoki;
++            data.push({ k: 'trait_yoki_power_name', v: yoki });
++        }
+         if (global.race['claws']){
+             let claws = (traits.claws.vars()[0] / 100);
+             army *= 1 + claws;
+diff --git a/src/index.js b/src/index.js
+index 8845ee9..358a7c0 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -14,14 +14,58 @@ import { renderFortress, buildFortress, drawMechLab, clearMechDrag, drawHellObse
+ import { renderEdenic } from './edenic.js';
+ import { drawShipYard, clearShipDrag, renderTauCeti } from './truepath.js';
+ import { arpa, clearGeneticsDrag } from './arpa.js';
++import { modPacks, installPack, removePack, modRaceOwner } from './mods.js';
++
++// Expansion: mod pack UI state
++const modUI = {
++    msg: modPacks.length ? loc('mods_installed',[modPacks.length]) : loc('mods_none'),
++    packs: modPacks.map(p => ({
++        id: p.id,
++        label: `${p.name}${p.version ? ' v' + p.version : ''}${p.author ? ' by ' + p.author : ''} (${Object.keys(p.races || {}).map(r => p.races[r].name || r).join(', ') || 'no races'})`
++    }))
++};
++
++function reloadForMods(){
++    save.setItem('evolved',LZString.compressToUTF16(JSON.stringify(global)));
++    if (webWorker.w){
++        webWorker.w.terminate();
++    }
++    window.location.reload();
++}
+ 
+ export function mainVue(){
+     vBind({
+         el: '#mainColumn div:first-child',
+         data: {
+-            s: global.settings
++            s: global.settings,
++            m: modUI
+         },
+         methods: {
++            installModFile(){
++                let input = document.getElementById("modPackFile");
++                let file = input.files[0];
++                if (!file){ return; }
++                let reader = new FileReader();
++                reader.readAsText(file, "UTF-8");
++                reader.onload = function (evt){
++                    let result = installPack(evt.target.result);
++                    if (!result.ok){
++                        modUI.msg = loc('mods_error',[file.name, result.error]);
++                        return;
++                    }
++                    reloadForMods();
++                };
++                reader.onerror = function(){ modUI.msg = loc('mods_error',[file.name,'read error']); };
++            },
++            removeMod(id){
++                let owner = modRaceOwner(global.race.species);
++                if (owner && (id === undefined || owner.id === id)){
++                    modUI.msg = loc('mods_in_use',[owner.name]);
++                    return;
++                }
++                removePack(id);
++                reloadForMods();
++            },
+             swapTab(tab){
+                 if (!global.settings.tabLoad){
+                     loadTab(tab);
+@@ -934,6 +978,7 @@ export function index(){
+             <h2 class="is-sr-only">Race Info</h2>
+             <div class="name">{{ name() }}</div>
+             <div class="morale-contain"><span id="morale" v-show="city.morale.current" class="morale">${loc('morale')} <span class="has-text-warning">{{ city.morale.current | mRound }}%</span></div>
++            <div class="awakening" v-show="awake()"><span class="has-text-danger" :title="awakeTip()">{{ awake() }}</span></div>
+             <div class="power"><span id="powerStatus" class="has-text-warning" v-show="city.powered"><span>MW</span> <span id="powerMeter" class="meter">{{ city.power | replicate | approx }}</span></span></div>
+         </div>
+         <div id="sideQueue">
+@@ -1439,6 +1484,21 @@ export function index(){
+         <div class="stringPack setting">
+             <span>{{  | sPack}}</span>
+         </div>
++        <div class="stringPack setting">
++            <span class="has-text-warning">${loc('mods_title')}</span>
++        </div>
++        <div class="stringPack setting">
++            <button id="modPack" class="button" @click="installModFile">${loc('mods_load')}</button>
++            <input type="file" class="fileImport" id="modPackFile" accept="application/json, text/plain">
++            <button class="button right" @click="removeMod()">${loc('mods_clear')}</button>
++        </div>
++        <div class="stringPack setting">
++            <span>{{ m.msg }}</span>
++        </div>
++        <div class="stringPack setting" v-for="p in m.packs" :key="p.id">
++            <span>{{ p.label }}</span>
++            <button class="button right is-small" @click="removeMod(p.id)">&times;</button>
++        </div>
+         <div class="importExport">
+             <b-field label="${loc('import_export')}">
+                 <b-input id="importExport" type="textarea"></b-input>
+diff --git a/src/jobs.js b/src/jobs.js
+index 3094ea3..da27e55 100644
+--- a/src/jobs.js
++++ b/src/jobs.js
+@@ -189,6 +189,9 @@ export const job_desc = {
+     torturer: function(){
+         return loc('job_torturer_desc');
+     },
++    handler: function(){
++        return loc('job_handler_desc');
++    },
+     miner: function(){
+         if (global.race['warlord']){
+             return loc('job_dig_demon_desc');
+@@ -381,6 +384,7 @@ export function defineJobs(define){
+     loadJob('teamster',define,1,global.tech['teamster'] ? 6 : 4);
+     loadJob('meditator',define,1,5);
+     loadJob('torturer',define,1,3,'advanced');
++    loadJob('handler',define,1,3,'advanced');
+     loadJob('miner',define,1,4,'advanced');
+     loadJob('coal_miner',define,0.2,4,'advanced');
+     loadJob('craftsman',define,1,5,'advanced');
+diff --git a/src/locale.js b/src/locale.js
+index df5a1f1..3725fbe 100644
+--- a/src/locale.js
++++ b/src/locale.js
+@@ -1,4 +1,5 @@
+ import { global, save } from './vars.js';
++import { modStrings } from './mods.js';
+ 
+ let strings;
+ getString(global.settings.locale);
+@@ -83,6 +84,13 @@ function getString(locale) {
+         }
+     }
+ 
++    try {
++        Object.assign(defaultString, modStrings());
++    }
++    catch (e) {
++        console.error(e,e.stack);
++    }
++
+     $.ajaxSetup({ async: true });
+     strings = defaultString;
+ }
+diff --git a/src/main.js b/src/main.js
+index a7f7ee0..7b8168d 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -14,6 +14,7 @@ import { asphodelResist, mechStationEffect, renderEdenic } from './edenic.js';
+ import { renderTauCeti, syndicate, shipFuelUse, spacePlanetStats, genXYcoord, shipCrewSize, tpStorageMultiplier, tritonWar, sensorRange, erisWar, calcAIDrift, drawMap, tauEnabled, shipCosts, buildTPShipQueue } from './truepath.js';
+ import { arpa, buildArpa, sequenceLabs } from './arpa.js';
+ import { events, eventList } from './events.js';
++import { yokiTick, yokiStress, awakeningLabel, awakeningTooltip } from './silverblood.js';
+ import { defineGovernor, govern, govActive, removeTask } from './governor.js';
+ import { production, highPopAdjust, teamster, factoryBonus } from './prod.js';
+ import { swissKnife } from './tech.js';
+@@ -304,6 +305,12 @@ vBind({
+     methods: {
+         name(){
+             return flib('name');
++        },
++        awake(){
++            return awakeningLabel();
++        },
++        awakeTip(){
++            return awakeningTooltip();
+         }
+     },
+     filters: {
+@@ -1516,6 +1523,10 @@ function fastLoop(){
+             if (global.race['high_pop']){
+                 army_stress /= traits.high_pop.vars()[0]
+             }
++            if (global.race['outcast']){
++                army_stress *= 1 + (traits.outcast.vars()[0] / 100);
++            }
++            army_stress += yokiStress();
+ 
+             stress -= army_stress;
+         }
+@@ -8132,6 +8143,7 @@ function fastLoop(){
+ 
+ function midLoop(){
+     const astroSign = astrologySign();
++    yokiTick();
+     if (global.race.species === 'protoplasm'){
+         let base = 100;
+         if (global.stats.achieve['mass_extinction'] && global.stats.achieve['mass_extinction'].l > 1){
+@@ -8248,6 +8260,7 @@ function midLoop(){
+             teamster: -1,
+             meditator: -1,
+             torturer: 0,
++            handler: 0,
+             miner: 0,
+             coal_miner: 0,
+             craftsman: 0,
+@@ -9928,6 +9941,10 @@ function midLoop(){
+             caps['Materials'] += support_on['mining_pit'] * 1000000;
+         }
+ 
++        if (global.civic.handler && global.civic.handler.display && global.city['organization']){
++            lCaps['handler'] = global.city.organization.count;
++        }
++
+         if (global.civic.torturer.display && global.tech['unfathomable'] && global.tech.unfathomable >= 2){
+             lCaps['torturer'] = global.city.captive_housing.count;
+         }
+diff --git a/src/mods.js b/src/mods.js
+new file mode 100644
+index 0000000..7f3a821
+--- /dev/null
++++ b/src/mods.js
+@@ -0,0 +1,244 @@
++// Mod Pack ("Workshop") support.
++//
++// A mod pack is a JSON file that adds new races built from existing traits,
++// plus optional extra strings. Installed packs are kept in localStorage under
++// MOD_STORAGE_KEY and applied on page load (the game reloads after changes).
++//
++// This module deliberately imports nothing so it can be evaluated before
++// every other game module (races.js, actions.js, achieve.js, locale.js).
++//
++// Example pack:
++// {
++//   "id": "starter_pack",
++//   "name": "Starter Pack",
++//   "version": "1.0.0",
++//   "author": "You",
++//   "races": {
++//     "lumari": {
++//       "name": "Lumari",
++//       "desc": "Glowing cave-dwellers who read by their own light.",
++//       "entity": "luminous humanoids",
++//       "home": "Glimmerdeep",
++//       "genus": "humanoid",
++//       "traits": { "studious": 1, "nyctophilia": 1 },
++//       "fanaticism": "studious",
++//       "solar": { "red": "Emberglow", "hell": "Duskfire", "gas": "Mistlight", "gas_moon": "Moonwick", "dwarf": "Faintstar" },
++//       "extinct": { "name": "Lights Out", "desc": "Led a Lumari civilization to destruction.", "flair": "Darkness returns" }
++//     }
++//   },
++//   "strings": { "some_existing_key": "Override text" }
++// }
++
++export const MOD_STORAGE_KEY = 'evolve_mod_packs';
++export const MOD_FORMAT_VERSION = 1;
++
++const RACE_KEY_RE = /^[a-z][a-z0-9_]{2,23}$/;
++const TEXT_MAX = 400;
++const SOLAR = ['red','hell','gas','gas_moon','dwarf'];
++const RESERVED = ['custom','hybrid','protoplasm','junker','sludge','ultra_sludge','hellspawn','sentience','synth','nano'];
++
++function storage(){
++    try { return window.localStorage; }
++    catch { return null; }
++}
++
++function cleanText(v, fallback){
++    if (typeof v !== 'string' || v.trim().length === 0){ return fallback; }
++    // Strings are rendered as HTML in places, so strip tags.
++    return v.replace(/[<>]/g, '').slice(0, TEXT_MAX);
++}
++
++// Structural validation that does not need game data.
++// Trait/genus checks happen later in registerModRaces() once races.js is loaded.
++export function validatePack(pack){
++    const errors = [];
++    if (!pack || typeof pack !== 'object' || Array.isArray(pack)){
++        return ['Pack must be a JSON object'];
++    }
++    if (typeof pack.id !== 'string' || !/^[a-z0-9_-]{1,40}$/i.test(pack.id)){
++        errors.push('"id" must be 1-40 letters, numbers, - or _');
++    }
++    if (typeof pack.name !== 'string' || !pack.name.trim()){
++        errors.push('"name" is required');
++    }
++    if (pack.races !== undefined && (typeof pack.races !== 'object' || Array.isArray(pack.races))){
++        errors.push('"races" must be an object keyed by race id');
++    }
++    if (pack.strings !== undefined && (typeof pack.strings !== 'object' || Array.isArray(pack.strings))){
++        errors.push('"strings" must be an object');
++    }
++    Object.keys(pack.races || {}).forEach(function(key){
++        const r = pack.races[key];
++        if (!RACE_KEY_RE.test(key)){
++            errors.push(`race "${key}": id must be lowercase letters/numbers/_ (3-24 chars, starting with a letter)`);
++        }
++        if (RESERVED.includes(key)){
++            errors.push(`race "${key}": id is reserved`);
++        }
++        if (!r || typeof r !== 'object'){
++            errors.push(`race "${key}": must be an object`);
++            return;
++        }
++        if (typeof r.name !== 'string' || !r.name.trim()){ errors.push(`race "${key}": "name" is required`); }
++        if (typeof r.genus !== 'string'){ errors.push(`race "${key}": "genus" is required`); }
++        if (!r.traits || typeof r.traits !== 'object' || Object.keys(r.traits).length === 0){
++            errors.push(`race "${key}": "traits" must list at least one trait`);
++        }
++        else if (Object.keys(r.traits).length > 4){
++            errors.push(`race "${key}": at most 4 traits`);
++        }
++    });
++    return errors;
++}
++
++function readPacks(){
++    const s = storage();
++    if (!s){ return []; }
++    try {
++        const raw = s.getItem(MOD_STORAGE_KEY);
++        if (!raw){ return []; }
++        const packs = JSON.parse(raw);
++        return Array.isArray(packs) ? packs.filter(p => validatePack(p).length === 0) : [];
++    }
++    catch (e){
++        console.error('Failed to read mod packs', e);
++        return [];
++    }
++}
++
++export const modPacks = readPacks();
++
++// Race ids contributed by mods, in install order, without duplicates.
++// Filtered again in registerModRaces() against the base game.
++export const modRaceKeys = [];
++modPacks.forEach(function(pack){
++    Object.keys(pack.races || {}).forEach(function(key){
++        if (!modRaceKeys.includes(key)){ modRaceKeys.push(key); }
++    });
++});
++
++// Which pack provides each race (for UI / save protection).
++export function modRaceOwner(key){
++    for (const pack of modPacks){
++        if (pack.races && pack.races[key]){ return pack; }
++    }
++    return null;
++}
++
++function raceDef(key){
++    const pack = modRaceOwner(key);
++    return pack ? pack.races[key] : null;
++}
++
++// Strings merged into the locale table, so loc('race_<id>') etc. work.
++export function modStrings(){
++    const out = {};
++    modPacks.forEach(function(pack){
++        Object.keys(pack.strings || {}).forEach(function(k){
++            if (typeof pack.strings[k] === 'string'){ out[k] = cleanText(pack.strings[k], ''); }
++        });
++    });
++    modRaceKeys.forEach(function(key){
++        const r = raceDef(key);
++        const name = cleanText(r.name, key);
++        out[`race_${key}`] = name;
++        out[`race_${key}_desc`] = cleanText(r.desc, `${name} are a race added by a mod pack.`);
++        out[`race_${key}_entity`] = cleanText(r.entity, name.toLowerCase());
++        out[`race_${key}_home`] = cleanText(r.home, `${name} Prime`);
++        SOLAR.forEach(function(p){
++            out[`race_${key}_solar_${p}`] = cleanText(r.solar && r.solar[p], `${name} ${p.replace('_',' ')}`);
++        });
++        const ex = r.extinct || {};
++        out[`achieve_extinct_${key}_name`] = cleanText(ex.name, `${name} Extinction`);
++        out[`achieve_extinct_${key}_desc`] = cleanText(ex.desc, `Led a ${name} civilization to destruction.`);
++        out[`achieve_extinct_${key}_flair`] = cleanText(ex.flair, 'Gone, but not forgotten');
++    });
++    return out;
++}
++
++// Called from races.js once the base races and traits exist.
++// Adds valid mod races to `races` and removes invalid ones from modRaceKeys.
++export function registerModRaces(races, traits, genus_def, loc){
++    const valid = [];
++    modRaceKeys.forEach(function(key){
++        const r = raceDef(key);
++        const problems = [];
++        if (races[key]){ problems.push('id already used by the base game'); }
++        if (!genus_def[r.genus] || ['hybrid','synthetic'].includes(r.genus)){ problems.push(`unknown or unsupported genus "${r.genus}"`); }
++        const tlist = {};
++        Object.keys(r.traits || {}).forEach(function(t){
++            const rank = Number(r.traits[t]);
++            if (!traits[t] || traits[t].type !== 'major'){ problems.push(`"${t}" is not a major trait`); return; }
++            if (![0.1,0.25,0.5,1,2,3,4].includes(rank)){ problems.push(`"${t}" rank must be one of 0.1, 0.25, 0.5, 1, 2, 3, 4`); return; }
++            tlist[t] = rank;
++        });
++        const tkeys = Object.keys(tlist);
++        if (tkeys.length === 0){ problems.push('no usable traits'); }
++        if (problems.length){
++            console.error(`Mod race "${key}" skipped: ${problems.join('; ')}`);
++            return;
++        }
++        const fanaticism = tkeys.includes(r.fanaticism) ? r.fanaticism : tkeys[0];
++        races[key] = {
++            name: loc(`race_${key}`),
++            desc: loc(`race_${key}_desc`),
++            type: r.genus,
++            home: loc(`race_${key}_home`),
++            entity: loc(`race_${key}_entity`),
++            traits: tlist,
++            solar: {
++                red: loc(`race_${key}_solar_red`),
++                hell: loc(`race_${key}_solar_hell`),
++                gas: loc(`race_${key}_solar_gas`),
++                gas_moon: loc(`race_${key}_solar_gas_moon`),
++                dwarf: loc(`race_${key}_solar_dwarf`),
++            },
++            fanaticism: fanaticism,
++            mod: modRaceOwner(key).id,
++            basic(){ return false; }
++        };
++        valid.push(key);
++    });
++    modRaceKeys.splice(0, modRaceKeys.length, ...valid);
++}
++
++// ---- Install / remove (used by the settings UI) ----
++
++export function installPack(text){
++    let pack;
++    try { pack = JSON.parse(text); }
++    catch { return { ok: false, error: 'not valid JSON' }; }
++    if (pack.format !== undefined && pack.format > MOD_FORMAT_VERSION){
++        return { ok: false, error: `pack needs a newer game version (format ${pack.format})` };
++    }
++    const errors = validatePack(pack);
++    if (errors.length){ return { ok: false, error: errors.join('; ') }; }
++    const s = storage();
++    if (!s){ return { ok: false, error: 'local storage unavailable' }; }
++    let packs = [];
++    try { packs = JSON.parse(s.getItem(MOD_STORAGE_KEY) || '[]'); } catch { packs = []; }
++    if (!Array.isArray(packs)){ packs = []; }
++    // Same id replaces the older version.
++    packs = packs.filter(p => p && p.id !== pack.id);
++    // A race id may only come from one pack.
++    for (const p of packs){
++        for (const key of Object.keys(pack.races || {})){
++            if (p.races && p.races[key]){
++                return { ok: false, error: `race "${key}" is already provided by "${p.name}"` };
++            }
++        }
++    }
++    packs.push(pack);
++    s.setItem(MOD_STORAGE_KEY, JSON.stringify(packs));
++    return { ok: true, pack: pack };
++}
++
++export function removePack(id){
++    const s = storage();
++    if (!s){ return; }
++    let packs = [];
++    try { packs = JSON.parse(s.getItem(MOD_STORAGE_KEY) || '[]'); } catch { packs = []; }
++    packs = Array.isArray(packs) ? packs.filter(p => p && (id === undefined ? false : p.id !== id)) : [];
++    if (packs.length){ s.setItem(MOD_STORAGE_KEY, JSON.stringify(packs)); }
++    else { s.removeItem(MOD_STORAGE_KEY); }
++}
+diff --git a/src/races.js b/src/races.js
+index 20098de..35e9ed8 100644
+--- a/src/races.js
++++ b/src/races.js
+@@ -14,6 +14,7 @@ import { renderEdenic } from './edenic.js';
+ import { events, eventList } from './events.js';
+ import { swissKnife } from './tech.js';
+ import { warhead, big_bang } from './resets.js';
++import { registerModRaces } from './mods.js';
+ 
+ const date = new Date();
+ const easter = getEaster();
+@@ -4859,6 +4860,61 @@ export const traits = {
+             }
+         }
+     },
++    // ---- Expansion: Silverblood ----
++    yoki_power: { // Combat bonus, but soldiers build up Awakening (see silverblood.js)
++        name: loc('trait_yoki_power_name'),
++        desc: loc('trait_yoki_power'),
++        type: 'major',
++        origin: 'silverblood',
++        taxonomy: 'combat',
++        val: 5,
++        vars(r){
++            // [Combat rating bonus %, Awakening build-up %]
++            switch (r || traitRank('yoki_power') || 1){
++                case 0.1:
++                    return [10,175];
++                case 0.25:
++                    return [14,150];
++                case 0.5:
++                    return [18,125];
++                case 1:
++                    return [25,100];
++                case 2:
++                    return [32,85];
++                case 3:
++                    return [38,70];
++                case 4:
++                    return [45,50];
++            }
++        }
++    },
++    outcast: { // Citizens fear the warriors that protect them
++        name: loc('trait_outcast_name'),
++        desc: loc('trait_outcast'),
++        type: 'major',
++        origin: 'silverblood',
++        taxonomy: 'utility',
++        val: -3,
++        vars(r){
++            // [Army stress increase %]
++            switch (r || traitRank('outcast') || 1){
++                case 0.1:
++                    return [70];
++                case 0.25:
++                    return [60];
++                case 0.5:
++                    return [50];
++                case 1:
++                    return [40];
++                case 2:
++                    return [30];
++                case 3:
++                    return [20];
++                case 4:
++                    return [10];
++            }
++        }
++    },
+     ooze: { // you are some kind of ooze, everything is bad
+         name: loc('trait_ooze_name'),
+         desc: loc('trait_ooze'),
+@@ -6233,6 +6289,27 @@ export const races = {
+         fanaticism: 'empowered',
+         basic(){ return false; }
+     },
++    silverblood: { // Expansion race
++        name: loc('race_silverblood'),
++        desc: loc('race_silverblood_desc'),
++        type: 'humanoid',
++        home: loc('race_silverblood_home'),
++        entity: loc('race_silverblood_entity'),
++        traits: {
++            yoki_power: 1,
++            outcast: 1,
++            regenerative: 0.5
++        },
++        solar: {
++            red: loc('race_silverblood_solar_red'),
++            hell: loc('race_silverblood_solar_hell'),
++            gas: loc('race_silverblood_solar_gas'),
++            gas_moon: loc('race_silverblood_solar_gas_moon'),
++            dwarf: loc('race_silverblood_solar_dwarf'),
++        },
++        fanaticism: 'yoki_power',
++        basic(){ return false; }
++    },
+     hellspawn: {
+         name: loc('race_hellspawn'),
+         desc: loc('race_hellspawn_desc'),
+@@ -6417,6 +6494,24 @@ export const races = {
+     hybrid: customRace(true)
+ };
+ 
++// Expansion: add races from installed mod packs
++registerModRaces(races, traits, genus_def, loc);
++// If a save uses a mod race that is no longer installed, keep the game loadable.
++if (global.race && global.race.species && !races[global.race.species]){
++    console.error(`Race "${global.race.species}" not found (missing mod pack?). Using a placeholder.`);
++    races[global.race.species] = {
++        name: global.race.species,
++        desc: 'A race from a mod pack that is no longer installed.',
++        type: 'humanoid',
++        home: 'Unknown',
++        entity: 'forgotten beings',
++        traits: {},
++        solar: { red: 'Red', hell: 'Hell', gas: 'Gas', gas_moon: 'Gas Moon', dwarf: 'Dwarf' },
++        fanaticism: 'none',
++        basic(){ return false; }
++    };
++}
++
+ export const genusVars = {
+     organism: {},
+     humanoid: {},
+diff --git a/src/silverblood.js b/src/silverblood.js
+new file mode 100644
+index 0000000..a87936e
+--- /dev/null
++++ b/src/silverblood.js
+@@ -0,0 +1,182 @@
++// Expansion: Silverblood race mechanics.
++//
++// Awakening meter: soldiers with Demon Power (yoki_power) slowly build up
++// Awakening. The Organization building and Handler job hold it back.
++// At 100% a warrior Awakens and becomes a monster that must be hunted.
++//
++// State lives in global.race.awakening = { m, boss, str, rate, hunts }.
++
++import { global } from './vars.js';
++import { loc } from './locale.js';
++import { traits } from './races.js';
++import { armyRating, garrisonSize, soldierDeath } from './civics.js';
++import { messageQueue } from './functions.js';
++import { drawCity, initStruct, actions } from './actions.js';
++
++export const yokiVars = {
++    soldierGain: 0.004,   // meter %/s per healthy soldier
++    woundGain: 0.012,     // extra meter %/s per wounded soldier
++    battleGain: 4,        // meter % per offensive campaign
++    orgCalm: 0.03,        // meter %/s removed per Organization
++    handlerCalm: 0.06,    // meter %/s removed per Handler
++    resetTo: 25,          // meter after an Awakening
++    maxBoss: 3,           // most Awakened Ones alive at once
++    rampage: 40,          // ~1 in N chance per second, per Awakened One, to kill a soldier
++    stressPerBoss: 3,     // morale stress per Awakened One
++};
++
++export function yokiActive(){
++    return global.race['yoki_power'] && global.race.species !== 'protoplasm';
++}
++
++export function yokiState(){
++    if (!global.race['awakening']){
++        global.race['awakening'] = { m: 0, boss: 0, str: 0, rate: 0, hunts: 0 };
++    }
++    return global.race.awakening;
++}
++
++function techFactor(){
++    return global.tech['high_tech'] ? global.tech['high_tech'] + 1 : 1;
++}
++
++function newStrength(){
++    return Math.rand(30, 61) * techFactor();
++}
++
++function orgCount(){
++    return global.city['organization'] ? global.city.organization.count : 0;
++}
++
++function handlers(){
++    return global.civic['handler'] ? global.civic.handler.workers : 0;
++}
++
++// Per-second rates, also used for tooltips.
++export function yokiRates(){
++    let gain = 0;
++    if (global.civic['garrison']){
++        let mult = traits.yoki_power.vars()[1] / 100;
++        let wounded = global.civic.garrison.wounded || 0;
++        let healthy = Math.max(0, garrisonSize() - wounded);
++        gain = (healthy * yokiVars.soldierGain + wounded * yokiVars.woundGain) * mult;
++    }
++    let calm = orgCount() * yokiVars.orgCalm + handlers() * yokiVars.handlerCalm;
++    return { gain, calm, net: gain - calm };
++}
++
++// Called once per game second from midLoop.
++export function yokiTick(){
++    if (!yokiActive()){ return; }
++    let a = yokiState();
++    if (!global.city['organization']){
++        initStruct(actions.city.organization);
++    }
++    let r = yokiRates();
++    a.rate = r.net;
++    a.m = Math.min(100, Math.max(0, a.m + r.net));
++
++    if (a.m >= 100){
++        awaken(a);
++    }
++
++    if (a.boss > 0 && global.civic['garrison'] && global.civic.garrison.workers > 0){
++        for (let i = 0; i < a.boss; i++){
++            if (Math.rand(0, yokiVars.rampage) === 0){
++                soldierDeath(1);
++                messageQueue(loc('yoki_rampage'),'danger',false,['combat']);
++                break;
++            }
++        }
++    }
++}
++
++function awaken(a){
++    a.m = yokiVars.resetTo;
++    if (a.boss >= yokiVars.maxBoss){
++        // Already overrun: the new monster takes soldiers with it instead.
++        let killed = Math.min(Math.rand(2, 6), global.civic.garrison.workers);
++        soldierDeath(killed);
++        messageQueue(loc('yoki_awaken_overrun',[killed]),'danger',false,['combat']);
++        return;
++    }
++    let wasZero = a.boss === 0;
++    a.boss++;
++    a.str = Math.max(a.str, newStrength());
++    messageQueue(loc('yoki_awaken',[a.boss]),'danger',false,['combat']);
++    if (wasZero){ drawCity(); }
++}
++
++// Battles push warriors closer to the edge.
++export function yokiBattle(){
++    if (!yokiActive()){ return; }
++    let a = yokiState();
++    a.m = Math.min(100, a.m + yokiVars.battleGain);
++}
++
++export function yokiStress(){
++    if (!yokiActive()){ return 0; }
++    return yokiState().boss * yokiVars.stressPerBoss;
++}
++
++// The "Hunt the Awakened" action.
++export function yokiHunt(){
++    let a = yokiState();
++    if (a.boss <= 0){ return false; }
++    let wounded = global.civic.garrison.wounded || 0;
++    let ready = garrisonSize() - wounded;
++    if (ready <= 0){
++        messageQueue(loc('yoki_hunt_nosoldiers'),'warning',false,['combat']);
++        return false;
++    }
++    let luck = Math.rand(8, 13) / 10;
++    let army = armyRating(garrisonSize(), 'army', wounded) * luck;
++    a.hunts++;
++    if (army >= a.str){
++        let killed = Math.min(Math.rand(0, Math.ceil(a.str / 25) + 1), ready);
++        let hurt = Math.min(Math.rand(0, Math.ceil(a.str / 10) + 1), ready - killed);
++        soldierDeath(killed);
++        global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
++        let bounty = Math.round(a.str * 60);
++        global.resource.Money.amount = Math.min(global.resource.Money.max, global.resource.Money.amount + bounty);
++        a.boss--;
++        a.str = a.boss > 0 ? newStrength() : 0;
++        messageQueue(loc('yoki_hunt_win',[killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
++        if (a.boss === 0){ drawCity(); }
++    }
++    else {
++        let killed = Math.min(Math.rand(2, Math.ceil(a.str / 12) + 3), ready);
++        let hurt = Math.min(Math.rand(1, Math.ceil(a.str / 8) + 2), ready - killed);
++        soldierDeath(killed);
++        global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
++        // The beast is hurt too, so each failed hunt makes the next one easier.
++        a.str = Math.max(1, Math.round(a.str * 0.8));
++        messageQueue(loc('yoki_hunt_loss',[killed, hurt]),'danger',false,['combat']);
++    }
++    return false;
++}
++
++export function yokiHuntEffect(){
++    let a = yokiState();
++    let army = global.civic['garrison'] ? Math.round(armyRating(garrisonSize(), 'army', global.civic.garrison.wounded)) : 0;
++    return `<div>${loc('city_hunt_awakened_effect',[a.boss])}</div><div class="has-text-caution">${loc('city_hunt_awakened_effect2',[Math.round(a.str), army])}</div>`;
++}
++
++// Text for the race header.
++export function awakeningLabel(){
++    if (!yokiActive()){ return ''; }
++    let a = yokiState();
++    let label = `${loc('yoki_meter')} ${Math.floor(a.m)}%`;
++    if (a.boss > 0){ label += ` (${a.boss})`; }
++    return label;
++}
++
++export function awakeningTooltip(){
++    if (!yokiActive()){ return ''; }
++    let r = yokiRates();
++    let fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2);
++    let tip = loc('yoki_meter_tooltip',[fmt(r.gain), fmt(-r.calm), fmt(r.net)]);
++    let a = yokiState();
++    if (a.boss > 0){ tip += ' ' + loc('yoki_boss_count',[a.boss]); }
++    return tip;
++}
+diff --git a/strings/strings.json b/strings/strings.json
+index f3efeaf..4a90feb 100644
+--- a/strings/strings.json
++++ b/strings/strings.json
+@@ -11639,5 +11639,49 @@
+   "wiki_achievements_incomplete": "Incomplete",
+   "wiki_achievements_completed": "Completed",
+   "wiki_search_placeholder": "No results found.",
+-  "wiki_search_regex_support": "RegEx Supported"
++  "wiki_search_regex_support": "RegEx Supported",
++  "race_silverblood": "Silverblood",
++  "race_silverblood_desc": "Silverbloods are humans infused with demon flesh, forged into silver-eyed warriors who hunt the monsters they are slowly becoming.",
++  "race_silverblood_entity": "silver-eyed half-demon warriors",
++  "race_silverblood_home": "Ashmere",
++  "race_silverblood_solar_red": "Greyspire",
++  "race_silverblood_solar_hell": "Cinderhold",
++  "race_silverblood_solar_gas": "Stormveil",
++  "race_silverblood_solar_gas_moon": "Palebrand",
++  "race_silverblood_solar_dwarf": "Lastvigil",
++  "achieve_extinct_silverblood_name": "Silver Twilight",
++  "achieve_extinct_silverblood_desc": "Led a Silverblood civilization to destruction.",
++  "achieve_extinct_silverblood_flair": "The last blade has fallen",
++  "trait_yoki_power_name": "Demon Power",
++  "trait_yoki_power": "Your warriors draw on demonic power in battle, but the more they fight, the closer they come to Awakening.",
++  "trait_outcast_name": "Outcast",
++  "trait_outcast": "Your citizens fear the warriors that protect them.",
++  "wiki_trait_effect_yoki_power": "Combat rating increased by %0%. Soldiers build up the Awakening meter at %1% speed.",
++  "wiki_trait_effect_outcast": "Stress from your army is increased by %0%.",
++  "mods_title": "Mod Packs (Workshop)",
++  "mods_load": "Install Mod Pack",
++  "mods_clear": "Remove All Mods",
++  "mods_none": "No mod packs installed.",
++  "mods_installed": "Installed mod packs: %0",
++  "mods_error": "Could not install %0: %1",
++  "mods_in_use": "Can't remove mods while playing a modded race (%0).",
++  "yoki_meter": "Awakening",
++  "yoki_boss_count": "Awakened Ones at large: %0.",
++  "yoki_meter_tooltip": "Soldiers: %0/s, Organization and Handlers: %1/s, Net: %2/s. At 100% a warrior Awakens into a monster.",
++  "yoki_awaken": "A warrior has lost control of her demonic power and Awakened! Awakened Ones at large: %0. Hunt them down before they kill more soldiers.",
++  "yoki_awaken_overrun": "Another warrior Awakened and fled to join the monsters already at large, killing %0 soldiers on her way out.",
++  "yoki_rampage": "An Awakened One ambushed a patrol and killed a soldier.",
++  "yoki_hunt_nosoldiers": "You have no healthy soldiers to send on the hunt.",
++  "yoki_hunt_win": "The hunt succeeded and an Awakened One was slain. %0 soldiers were killed and %1 were wounded. The bounty paid $%2.",
++  "yoki_hunt_loss": "The hunt failed! %0 soldiers were killed and %1 were wounded, but the Awakened One is weakened.",
++  "city_organization": "The Organization",
++  "city_organization_desc": "A secretive order that trains, watches over and, when necessary, puts down your warriors.",
++  "city_organization_effect": "Reduces the Awakening meter by %0% per second.",
++  "city_organization_effect2": "Awakening: %0% (%1% per second)",
++  "city_hunt_awakened": "Hunt the Awakened",
++  "city_hunt_awakened_desc": "Send your garrison after an Awakened One.",
++  "city_hunt_awakened_effect": "Awakened Ones at large: %0. Each one kills soldiers and increases stress.",
++  "city_hunt_awakened_effect2": "Monster strength: %0. Your army rating: %1.",
++  "job_handler": "Handler",
++  "job_handler_desc": "Handlers watch over your warriors and reduce the Awakening meter by 0.06% per second each."
+ }
+-- 
+2.43.0
+
