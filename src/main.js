@@ -14,7 +14,7 @@ import { asphodelResist, mechStationEffect, renderEdenic } from './edenic.js';
 import { renderTauCeti, syndicate, shipFuelUse, spacePlanetStats, genXYcoord, shipCrewSize, tpStorageMultiplier, tritonWar, sensorRange, erisWar, calcAIDrift, drawMap, tauEnabled, shipCosts, buildTPShipQueue } from './truepath.js';
 import { arpa, buildArpa, sequenceLabs } from './arpa.js';
 import { events, eventList } from './events.js';
-import { yokiTick, yokiStress, awakeningLabel, awakeningTooltip, infestedTick } from './silverblood.js';
+import { yokiTick, yokiStress, yokiStressCut, awakeningLabel, awakeningTooltip, infestedTick } from './silverblood.js';
 import { defineGovernor, govern, govActive, removeTask } from './governor.js';
 import { production, highPopAdjust, teamster, factoryBonus } from './prod.js';
 import { swissKnife } from './tech.js';
@@ -1526,7 +1526,7 @@ function fastLoop(){
             if (global.race['outcast']){
                 army_stress *= 1 + (traits.outcast.vars()[0] / 100);
             }
-            army_stress += yokiStress();
+            army_stress = army_stress * (1 - yokiStressCut()) + yokiStress();
 
             stress -= army_stress;
         }

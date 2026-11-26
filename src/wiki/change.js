@@ -4,6 +4,20 @@ import { clearElement } from './../functions.js';
 export const changeList = [
     { // Fan expansion (not part of the official game)
         version: `1.4.10`,
+        revision: ` Silverblood Expansion v1.1`,
+        date: `11/27/2026`,
+        changes: [
+            `Warriors of the Organization: recruit named elite warriors in Civics, Military. One slot per Organization, up to 8.`,
+            `Each warrior has random stats (Strength, Speed, Control, Sense, Will), perks, a temperament and a potential grade.`,
+            `Warriors level up from battles. Each stat has its own hidden chance to grow on every level up.`,
+            `Hiring costs a fee, and warriors are paid a wage every day. Unpaid warriors lose loyalty.`,
+            `Each warrior has her own Awakening meter. Rest her to lower it, at the cost of her bonuses.`,
+            `Warriors can die in battle, with a 5% to 25% chance to defy death. Fallen warriors are remembered in the Hall of the Fallen.`,
+            `Warriors who Awaken, desert or retire unhappy may come back as named enemies.`
+        ]
+    },
+    {
+        version: `1.4.10`,
         revision: ` Silverblood Expansion v1.0`,
         date: `11/27/2026`,
         changes: [

@@ -18,7 +18,7 @@ import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js'
 import { bioseed } from './resets.js';
 import { loadTab } from './index.js';
 import { modRaceKeys } from './mods.js';
-import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt } from './silverblood.js';
+import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt, yokiHuntAvailable } from './silverblood.js';
 
 export const actions = {
     evolution: {
@@ -2065,7 +2065,7 @@ export const actions = {
             reqs: { military: 1 },
             trait: ['yoki_power'],
             not_trait: ['cataclysm','lone_survivor'],
-            condition(){ return yokiState().boss > 0; },
+            condition(){ return yokiHuntAvailable(); },
             queue_complete(){ return 0; },
             cost: {},
             effect(args){ return args && args.isWiki ? '' : yokiHuntEffect(); },

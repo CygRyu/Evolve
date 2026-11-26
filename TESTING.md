@@ -59,14 +59,27 @@ Notes:
 
 Notes:
 
-## 7. Achievements and wiki
+## 7. Warriors of the Organization
+- [ ] After the first Organization, the **Warriors of the Organization** panel appears in Civics, Military, with 3 recruits.
+- [ ] Hiring takes the fee, and the roster limit equals the number of Organizations (up to 8).
+- [ ] Each day the wages are paid. With no money, a warning appears and loyalty drops.
+- [ ] Rest a warrior: her bonus disappears from combat rating ("Elite Warriors" line), her meter goes down, and the button is locked for 2 minutes.
+- [ ] Rename works and survives a page reload.
+- [ ] After a few hunts, warriors level up, and a message lists which stats grew.
+- [ ] Watch for a death, a "refused to fall" (defied death) message, and an Awakened warrior who then shows up as a named target in Hunt the Awakened.
+- [ ] Retire an unhappy warrior and see whether she comes back later.
+- [ ] Is the wage fair? Early on, it should be noticeable but affordable. Note it late game too.
+
+Notes:
+
+## 8. Achievements and wiki
 - [ ] Stats → Achievements lists Silver Hunter, Unbroken, Abyss Walker and Beast Country.
 - [ ] Hovering over the version number (top right) shows the expansion changelog.
 - [ ] In the wiki, the Silverblood race, the Demon Power trait, The Organization, the two hunts and the Monster-infested planet all have entries.
 
 Notes:
 
-## 8. Saves
+## 9. Saves
 - [ ] Export a save from the original game and import it here. It loads without errors.
 - [ ] Reload the page mid-run. The meter, Awakened Ones and Abyssal progress are all kept.
 
@@ -87,3 +100,7 @@ If something feels wrong, these are the numbers to change. All of them are in `s
 | Abyssal health | `abyssVars.hp` | 4k, 9k, 18k, 36k, 75k |
 | Abyssal soldier losses | `abyssVars.fury` | 4% to 9% at risk per expedition |
 | Time between raids | `planetTraits.infested` in `src/races.js` | 600 seconds |
+| Recruit fee | `warriorVars.feeMoneyPct` in `src/warriors.js` | 20% of your Money cap, scaled by quality |
+| Daily wage | `warriorVars.wagePct` | 1% of her fee per day |
+| Warrior army bonus | `warriorVars.armyDivisor` | total Strength / 800 |
+| Death and defy chances | `fights` and `warriorVars.defyBase/defyMax` | see file |

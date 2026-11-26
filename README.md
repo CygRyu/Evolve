@@ -21,6 +21,16 @@ Humans infused with demon flesh: elite warriors who are slowly becoming the mons
 - At 100%, a warrior Awakens into a monster that kills soldiers and adds stress until you hunt it down with **Hunt the Awakened**.
 - **The Organization** (a new building) and **Handlers** (a new job) hold the meter back.
 
+**Warriors of the Organization**
+Recruit up to 8 named elite warriors, one slot per Organization, in the Civics, Military tab. It works like Battle Brothers:
+
+- Every recruit is randomly generated, with five stats (Strength, Speed, Control, Sense, Will), perks and flaws, and a temperament.
+- Hiring costs a fee, and every warrior is paid a wage each day. If you can't pay, loyalty drops, and unhappy warriors may desert.
+- Warriors level up from battles, Fire Emblem style: each stat has its own hidden chance to grow on every level up.
+- Each warrior has her own Awakening meter. Resting her lowers it, but she gives no bonuses while resting and still gets paid.
+- Warriors can die in battle, with a 5% to 25% chance to defy death.
+- A warrior who Awakens, deserts or retires unhappy may come back as a named enemy.
+
 **Endgame: the Abyssal Ones**
 After building a fortress in Hell, Silverbloods can hunt five ancient Awakened, each stronger than the last. Every kill makes your army stronger for the rest of the run.
 

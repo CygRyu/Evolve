@@ -11,6 +11,7 @@ import { templeCount } from './actions.js';
 import { astrologySign, astroVal } from './seasons.js';
 import { warhead } from './resets.js';
 import { yokiBattle, abyssCombatBonus } from './silverblood.js';
+import { warriorsArmyBonus, warriorsBattle, drawWarriors } from './warriors.js';
 
 // Sets up government in civics tab
 export function defineGovernment(define){
@@ -85,6 +86,7 @@ export function defineGarrison(){
     
     buildGarrison(garrison,true);
     defineMad();
+    drawWarriors();
 }
 
 export function commisionGarrison(){
@@ -1572,6 +1574,7 @@ function war_campaign(gov){
     }
     global.stats.attacks++;
     yokiBattle();
+    warriorsBattle('campaign', true);
 
     let highLuck = global.race['claws'] ? 20 : 16;
     let lowLuck = global.race['puny'] ? 3 : 5;
@@ -2199,6 +2202,11 @@ export function armyRating(val,type,wound,analysis){
             if (abyss > 0){
                 army *= 1 + abyss;
                 data.push({ k: 'abyssal_bd', v: abyss });
+            }
+            let elite = warriorsArmyBonus();
+            if (elite > 0){
+                army *= 1 + elite;
+                data.push({ k: 'sw_army_bd', v: elite });
             }
         }
         let silverFathom = fathomCheck('silverblood');
