@@ -14,6 +14,7 @@ import { renderEdenic } from './edenic.js';
 import { events, eventList } from './events.js';
 import { swissKnife } from './tech.js';
 import { warhead, big_bang } from './resets.js';
+import { registerModRaces } from './mods.js';
 
 const date = new Date();
 const easter = getEaster();
@@ -4859,6 +4860,61 @@ export const traits = {
             }
         }
     },
+    // ---- Expansion: Silverblood ----
+    yoki_power: { // Combat bonus, but soldiers build up Awakening (see silverblood.js)
+        name: loc('trait_yoki_power_name'),
+        desc: loc('trait_yoki_power'),
+        type: 'major',
+        origin: 'silverblood',
+        taxonomy: 'combat',
+        val: 5,
+        vars(r){
+            // [Combat rating bonus %, Awakening build-up %]
+            switch (r || traitRank('yoki_power') || 1){
+                case 0.1:
+                    return [10,175];
+                case 0.25:
+                    return [14,150];
+                case 0.5:
+                    return [18,125];
+                case 1:
+                    return [25,100];
+                case 2:
+                    return [32,85];
+                case 3:
+                    return [38,70];
+                case 4:
+                    return [45,50];
+            }
+        }
+    },
+    outcast: { // Citizens fear the warriors that protect them
+        name: loc('trait_outcast_name'),
+        desc: loc('trait_outcast'),
+        type: 'major',
+        origin: 'silverblood',
+        taxonomy: 'utility',
+        val: -3,
+        vars(r){
+            // [Army stress increase %]
+            switch (r || traitRank('outcast') || 1){
+                case 0.1:
+                    return [70];
+                case 0.25:
+                    return [60];
+                case 0.5:
+                    return [50];
+                case 1:
+                    return [40];
+                case 2:
+                    return [30];
+                case 3:
+                    return [20];
+                case 4:
+                    return [10];
+            }
+        }
+    },
     ooze: { // you are some kind of ooze, everything is bad
         name: loc('trait_ooze_name'),
         desc: loc('trait_ooze'),
@@ -6233,6 +6289,27 @@ export const races = {
         fanaticism: 'empowered',
         basic(){ return false; }
     },
+    silverblood: { // Expansion race
+        name: loc('race_silverblood'),
+        desc: loc('race_silverblood_desc'),
+        type: 'humanoid',
+        home: loc('race_silverblood_home'),
+        entity: loc('race_silverblood_entity'),
+        traits: {
+            yoki_power: 1,
+            outcast: 1,
+            regenerative: 0.5
+        },
+        solar: {
+            red: loc('race_silverblood_solar_red'),
+            hell: loc('race_silverblood_solar_hell'),
+            gas: loc('race_silverblood_solar_gas'),
+            gas_moon: loc('race_silverblood_solar_gas_moon'),
+            dwarf: loc('race_silverblood_solar_dwarf'),
+        },
+        fanaticism: 'yoki_power',
+        basic(){ return false; }
+    },
     hellspawn: {
         name: loc('race_hellspawn'),
         desc: loc('race_hellspawn_desc'),
@@ -6416,6 +6493,24 @@ export const races = {
     custom: customRace(),
     hybrid: customRace(true)
 };
+
+// Expansion: add races from installed mod packs
+registerModRaces(races, traits, genus_def, loc);
+// If a save uses a mod race that is no longer installed, keep the game loadable.
+if (global.race && global.race.species && !races[global.race.species]){
+    console.error(`Race "${global.race.species}" not found (missing mod pack?). Using a placeholder.`);
+    races[global.race.species] = {
+        name: global.race.species,
+        desc: 'A race from a mod pack that is no longer installed.',
+        type: 'humanoid',
+        home: 'Unknown',
+        entity: 'forgotten beings',
+        traits: {},
+        solar: { red: 'Red', hell: 'Hell', gas: 'Gas', gas_moon: 'Gas Moon', dwarf: 'Dwarf' },
+        fanaticism: 'none',
+        basic(){ return false; }
+    };
+}
 
 export const genusVars = {
     organism: {},

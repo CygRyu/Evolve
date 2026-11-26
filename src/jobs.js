@@ -189,6 +189,9 @@ export const job_desc = {
     torturer: function(){
         return loc('job_torturer_desc');
     },
+    handler: function(){
+        return loc('job_handler_desc');
+    },
     miner: function(){
         if (global.race['warlord']){
             return loc('job_dig_demon_desc');
@@ -381,6 +384,7 @@ export function defineJobs(define){
     loadJob('teamster',define,1,global.tech['teamster'] ? 6 : 4);
     loadJob('meditator',define,1,5);
     loadJob('torturer',define,1,3,'advanced');
+    loadJob('handler',define,1,3,'advanced');
     loadJob('miner',define,1,4,'advanced');
     loadJob('coal_miner',define,0.2,4,'advanced');
     loadJob('craftsman',define,1,5,'advanced');

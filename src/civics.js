@@ -10,6 +10,7 @@ import { jobScale } from './jobs.js';
 import { templeCount } from './actions.js';
 import { astrologySign, astroVal } from './seasons.js';
 import { warhead } from './resets.js';
+import { yokiBattle } from './silverblood.js';
 
 // Sets up government in civics tab
 export function defineGovernment(define){
@@ -1570,6 +1571,7 @@ function war_campaign(gov){
         return;
     }
     global.stats.attacks++;
+    yokiBattle();
 
     let highLuck = global.race['claws'] ? 20 : 16;
     let lowLuck = global.race['puny'] ? 3 : 5;
@@ -2188,6 +2190,11 @@ export function armyRating(val,type,wound,analysis){
             let puny = (traits.puny.vars()[0] / 100);
             army *= 1 - puny;
             data.push({ k: 'trait_puny_name', v: -(puny) });
+        }
+        if (global.race['yoki_power']){
+            let yoki = (traits.yoki_power.vars()[0] / 100);
+            army *= 1 + yoki;
+            data.push({ k: 'trait_yoki_power_name', v: yoki });
         }
         if (global.race['claws']){
             let claws = (traits.claws.vars()[0] / 100);

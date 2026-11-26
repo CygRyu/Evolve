@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "id": "starter_pack",
+  "name": "Starter Pack",
+  "version": "1.0.0",
+  "author": "Evolve Expansion",
+  "races": {
+    "lumari": {
+      "name": "Lumari",
+      "desc": "Lumari are glowing cave-dwellers who read by their own light and fear the open sun.",
+      "entity": "luminous cave folk",
+      "home": "Glimmerdeep",
+      "genus": "humanoid",
+      "traits": { "studious": 1, "nyctophilia": 1 },
+      "fanaticism": "studious",
+      "solar": {
+        "red": "Emberglow",
+        "hell": "Duskfire",
+        "gas": "Mistlight",
+        "gas_moon": "Moonwick",
+        "dwarf": "Faintstar"
+      },
+      "extinct": {
+        "name": "Lights Out",
+        "desc": "Led a Lumari civilization to destruction.",
+        "flair": "Darkness returns"
+      }
+    },
+    "ironhide": {
+      "name": "Ironhide",
+      "desc": "Ironhides are hulking beasts with plated skin, slow to think but nearly impossible to wound.",
+      "entity": "armored brutes",
+      "home": "Rustvale",
+      "genus": "giant",
+      "traits": { "armored": 1, "tough": 1, "dumb": 1 },
+      "fanaticism": "armored"
+    }
+  }
+}

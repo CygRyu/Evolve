@@ -14,14 +14,58 @@ import { renderFortress, buildFortress, drawMechLab, clearMechDrag, drawHellObse
 import { renderEdenic } from './edenic.js';
 import { drawShipYard, clearShipDrag, renderTauCeti } from './truepath.js';
 import { arpa, clearGeneticsDrag } from './arpa.js';
+import { modPacks, installPack, removePack, modRaceOwner } from './mods.js';
+
+// Expansion: mod pack UI state
+const modUI = {
+    msg: modPacks.length ? loc('mods_installed',[modPacks.length]) : loc('mods_none'),
+    packs: modPacks.map(p => ({
+        id: p.id,
+        label: `${p.name}${p.version ? ' v' + p.version : ''}${p.author ? ' by ' + p.author : ''} (${Object.keys(p.races || {}).map(r => p.races[r].name || r).join(', ') || 'no races'})`
+    }))
+};
+
+function reloadForMods(){
+    save.setItem('evolved',LZString.compressToUTF16(JSON.stringify(global)));
+    if (webWorker.w){
+        webWorker.w.terminate();
+    }
+    window.location.reload();
+}
 
 export function mainVue(){
     vBind({
         el: '#mainColumn div:first-child',
         data: {
-            s: global.settings
+            s: global.settings,
+            m: modUI
         },
         methods: {
+            installModFile(){
+                let input = document.getElementById("modPackFile");
+                let file = input.files[0];
+                if (!file){ return; }
+                let reader = new FileReader();
+                reader.readAsText(file, "UTF-8");
+                reader.onload = function (evt){
+                    let result = installPack(evt.target.result);
+                    if (!result.ok){
+                        modUI.msg = loc('mods_error',[file.name, result.error]);
+                        return;
+                    }
+                    reloadForMods();
+                };
+                reader.onerror = function(){ modUI.msg = loc('mods_error',[file.name,'read error']); };
+            },
+            removeMod(id){
+                let owner = modRaceOwner(global.race.species);
+                if (owner && (id === undefined || owner.id === id)){
+                    modUI.msg = loc('mods_in_use',[owner.name]);
+                    return;
+                }
+                removePack(id);
+                reloadForMods();
+            },
             swapTab(tab){
                 if (!global.settings.tabLoad){
                     loadTab(tab);
@@ -934,6 +978,7 @@ export function index(){
             <h2 class="is-sr-only">Race Info</h2>
             <div class="name">{{ name() }}</div>
             <div class="morale-contain"><span id="morale" v-show="city.morale.current" class="morale">${loc('morale')} <span class="has-text-warning">{{ city.morale.current | mRound }}%</span></div>
+            <div class="awakening" v-show="awake()"><span class="has-text-danger" :title="awakeTip()">{{ awake() }}</span></div>
             <div class="power"><span id="powerStatus" class="has-text-warning" v-show="city.powered"><span>MW</span> <span id="powerMeter" class="meter">{{ city.power | replicate | approx }}</span></span></div>
         </div>
         <div id="sideQueue">
@@ -1438,6 +1483,21 @@ export function index(){
         </div>
         <div class="stringPack setting">
             <span>{{  | sPack}}</span>
+        </div>
+        <div class="stringPack setting">
+            <span class="has-text-warning">${loc('mods_title')}</span>
+        </div>
+        <div class="stringPack setting">
+            <button id="modPack" class="button" @click="installModFile">${loc('mods_load')}</button>
+            <input type="file" class="fileImport" id="modPackFile" accept="application/json, text/plain">
+            <button class="button right" @click="removeMod()">${loc('mods_clear')}</button>
+        </div>
+        <div class="stringPack setting">
+            <span>{{ m.msg }}</span>
+        </div>
+        <div class="stringPack setting" v-for="p in m.packs" :key="p.id">
+            <span>{{ p.label }}</span>
+            <button class="button right is-small" @click="removeMod(p.id)">&times;</button>
         </div>
         <div class="importExport">
             <b-field label="${loc('import_export')}">

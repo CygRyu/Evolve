@@ -17,6 +17,8 @@ import { techList, techPath } from './tech.js';
 import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js';
 import { bioseed } from './resets.js';
 import { loadTab } from './index.js';
+import { modRaceKeys } from './mods.js';
+import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars } from './silverblood.js';
 
 export const actions = {
     evolution: {
@@ -899,7 +901,7 @@ export const actions = {
                     else {
                         for (let idx in raceList){
                             let id = raceList[idx];
-                            if (races[id].type === type){
+                            if (races[id] && races[id].type === type){
                                 allowed.push(id);
                             }
                         }
@@ -917,7 +919,7 @@ export const actions = {
             emblem(){
                 for (let idx in raceList){
                     let id = raceList[idx];
-                    if (global.tech[`evo_${races[id].type}`] && global.tech[`evo_${races[id].type}`] >= 2){
+                    if (races[id] && global.tech[`evo_${races[id].type}`] && global.tech[`evo_${races[id].type}`] >= 2){
                         return format_emblem(`genus_${races[id].type}`);
                     }
                 }
@@ -2017,6 +2019,55 @@ export const actions = {
                 if (soldiers <= 0){ return 1; }
                 return jobScale(soldiers);
             }
+        },
+        organization: { // Expansion: Silverblood
+            id: 'city-organization',
+            title: loc('city_organization'),
+            desc: loc('city_organization_desc'),
+            category: 'military',
+            reqs: { military: 1 },
+            trait: ['yoki_power'],
+            not_trait: ['cataclysm','lone_survivor'],
+            cost: {
+                Money(offset){ return costMultiplier('organization', offset, 350, 1.32); },
+                Stone(offset){ return costMultiplier('organization', offset, 250, 1.32); },
+                Furs(offset){ return costMultiplier('organization', offset, 40, 1.32); }
+            },
+            effect(){
+                let a = yokiState();
+                let r = yokiRates();
+                return `<div>${loc('city_organization_effect',[yokiVars.orgCalm])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div><div class="has-text-caution">${loc('city_organization_effect2',[Math.floor(a.m), (r.net >= 0 ? '+' : '') + r.net.toFixed(2)])}</div>`;
+            },
+            action(args){
+                if (payCosts($(this)[0])){
+                    incrementStruct('organization','city');
+                    if (!global.civic.handler.display){
+                        global.civic.handler.display = true;
+                    }
+                    return true;
+                }
+                return false;
+            },
+            struct(){
+                return {
+                    d: { count: 0 },
+                    p: ['organization','city']
+                };
+            }
+        },
+        hunt_awakened: { // Expansion: Silverblood
+            id: 'city-hunt_awakened',
+            title: loc('city_hunt_awakened'),
+            desc: loc('city_hunt_awakened_desc'),
+            category: 'military',
+            reqs: { military: 1 },
+            trait: ['yoki_power'],
+            not_trait: ['cataclysm','lone_survivor'],
+            condition(){ return yokiState().boss > 0; },
+            queue_complete(){ return 0; },
+            cost: {},
+            effect(){ return yokiHuntEffect(); },
+            action(args){ return yokiHunt(); }
         },
         hospital: {
             id: 'city-hospital',
@@ -5155,6 +5206,8 @@ const raceList = [
     'synth','nano',
     'ghast','shoggoth',
     'dwarf','raccoon','lichen','wyvern','beholder','djinn','narwhal','bombardier','nephilim',
+    'silverblood', // Expansion races
+    ...modRaceKeys,
     'custom','hybrid'
 ];
 raceList.forEach(function(race){
@@ -5171,6 +5224,7 @@ raceList.forEach(function(race){
             reqs: { evo: 7 },
             grant: ['evo',8],
             condition(){
+                if (!races[race]){ return false; } // invalid mod race
                 let typeList = global.stats.achieve['godslayer'] && races[race].type === 'hybrid' ? races[race].hybrid : [races[race].type];
                 let typeCheck = false;
                 typeList.forEach(function(t){
@@ -5223,6 +5277,7 @@ if (Object.keys(global.stats.synth).length > 1){
             if ((race === 'custom' && !global.custom.hasOwnProperty('race0')) || (race === 'hybrid' && !global.custom.hasOwnProperty('race1'))){
                 return false;
             }
+            if (!races[race]){ return false; } // invalid mod race
             return (global.stats.synth[race] || global['beta']) && global.race['evoFinalMenu'];
         },
         cost: {},

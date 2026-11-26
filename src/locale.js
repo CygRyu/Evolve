@@ -1,4 +1,5 @@
 import { global, save } from './vars.js';
+import { modStrings } from './mods.js';
 
 let strings;
 getString(global.settings.locale);
@@ -81,6 +82,13 @@ function getString(locale) {
         if (defaultString.length != defSize && global.settings.expose){
             console.error(`string pack has extra keys.`);
         }
+    }
+
+    try {
+        Object.assign(defaultString, modStrings());
+    }
+    catch (e) {
+        console.error(e,e.stack);
     }
 
     $.ajaxSetup({ async: true });

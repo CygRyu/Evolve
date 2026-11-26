@@ -5,6 +5,7 @@ import { actions } from './actions.js';
 import { universe_affixes, universe_types, piracy } from './space.js';
 import { monsters } from './portal.js';
 import { loc } from './locale.js'
+import { modRaceKeys } from './mods.js';
 
 const achieve_list = {
     misc: [
@@ -25,7 +26,9 @@ const achieve_list = {
         'extinct_satyr','extinct_phoenix','extinct_salamander','extinct_yeti','extinct_wendigo','extinct_tuskin','extinct_kamel','extinct_balorg',
         'extinct_imp','extinct_seraph','extinct_unicorn','extinct_synth','extinct_nano','extinct_ghast','extinct_shoggoth','extinct_dwarf',
         'extinct_raccoon','extinct_lichen','extinct_wyvern','extinct_beholder','extinct_djinn','extinct_narwhal','extinct_bombardier','extinct_nephilim',
-        'extinct_junker','extinct_sludge','extinct_ultra_sludge','extinct_custom','extinct_hybrid'
+        'extinct_junker','extinct_sludge','extinct_ultra_sludge','extinct_custom','extinct_hybrid',
+        'extinct_silverblood',
+        ...modRaceKeys.map(r => `extinct_${r}`)
     ],
     genus: [
         'creator','genus_humanoid','genus_carnivore','genus_herbivore','genus_small','genus_giant','genus_reptilian','genus_avian',

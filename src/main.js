@@ -14,6 +14,7 @@ import { asphodelResist, mechStationEffect, renderEdenic } from './edenic.js';
 import { renderTauCeti, syndicate, shipFuelUse, spacePlanetStats, genXYcoord, shipCrewSize, tpStorageMultiplier, tritonWar, sensorRange, erisWar, calcAIDrift, drawMap, tauEnabled, shipCosts, buildTPShipQueue } from './truepath.js';
 import { arpa, buildArpa, sequenceLabs } from './arpa.js';
 import { events, eventList } from './events.js';
+import { yokiTick, yokiStress, awakeningLabel, awakeningTooltip } from './silverblood.js';
 import { defineGovernor, govern, govActive, removeTask } from './governor.js';
 import { production, highPopAdjust, teamster, factoryBonus } from './prod.js';
 import { swissKnife } from './tech.js';
@@ -304,6 +305,12 @@ vBind({
     methods: {
         name(){
             return flib('name');
+        },
+        awake(){
+            return awakeningLabel();
+        },
+        awakeTip(){
+            return awakeningTooltip();
         }
     },
     filters: {
@@ -1516,6 +1523,10 @@ function fastLoop(){
             if (global.race['high_pop']){
                 army_stress /= traits.high_pop.vars()[0]
             }
+            if (global.race['outcast']){
+                army_stress *= 1 + (traits.outcast.vars()[0] / 100);
+            }
+            army_stress += yokiStress();
 
             stress -= army_stress;
         }
@@ -8132,6 +8143,7 @@ function fastLoop(){
 
 function midLoop(){
     const astroSign = astrologySign();
+    yokiTick();
     if (global.race.species === 'protoplasm'){
         let base = 100;
         if (global.stats.achieve['mass_extinction'] && global.stats.achieve['mass_extinction'].l > 1){
@@ -8248,6 +8260,7 @@ function midLoop(){
             teamster: -1,
             meditator: -1,
             torturer: 0,
+            handler: 0,
             miner: 0,
             coal_miner: 0,
             craftsman: 0,
@@ -9926,6 +9939,10 @@ function midLoop(){
         if (global.tauceti['mining_pit']){
             lCaps['pit_miner'] += jobScale(support_on['mining_pit'] * (global.tech['isolation'] ? 6 : 8));
             caps['Materials'] += support_on['mining_pit'] * 1000000;
+        }
+
+        if (global.civic.handler && global.civic.handler.display && global.city['organization']){
+            lCaps['handler'] = global.city.organization.count;
         }
 
         if (global.civic.torturer.display && global.tech['unfathomable'] && global.tech.unfathomable >= 2){
