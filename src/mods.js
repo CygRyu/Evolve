@@ -21,6 +21,7 @@
 //       "home": "Glimmerdeep",
 //       "genus": "humanoid",
 //       "traits": { "studious": 1, "nyctophilia": 1 },
+//       "unlocked": true,
 //       "fanaticism": "studious",
 //       "solar": { "red": "Emberglow", "hell": "Duskfire", "gas": "Mistlight", "gas_moon": "Moonwick", "dwarf": "Faintstar" },
 //       "extinct": { "name": "Lights Out", "desc": "Led a Lumari civilization to destruction.", "flair": "Darkness returns" }
@@ -195,6 +196,7 @@ export function registerModRaces(races, traits, genus_def, loc){
             },
             fanaticism: fanaticism,
             mod: modRaceOwner(key).id,
+            unlocked(){ return r.unlocked === true; },
             basic(){ return false; }
         };
         valid.push(key);

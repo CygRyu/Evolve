@@ -5232,6 +5232,7 @@ raceList.forEach(function(race){
                 });
                  
                 return (global.race.seeded 
+                    || (races[race].unlocked && races[race].unlocked()) // Expansion: always selectable
                     || (global.stats.achieve['mass_extinction'] && global.stats.achieve['mass_extinction'].l >= 1) 
                     || (global.stats.achieve[`extinct_${race}`] && global.stats.achieve[`extinct_${race}`].l >= 1))
                     && typeCheck 

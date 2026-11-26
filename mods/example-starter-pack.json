@@ -12,6 +12,7 @@
       "home": "Glimmerdeep",
       "genus": "humanoid",
       "traits": { "studious": 1, "nyctophilia": 1 },
+      "unlocked": true,
       "fanaticism": "studious",
       "solar": {
         "red": "Emberglow",

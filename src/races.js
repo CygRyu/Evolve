@@ -6308,6 +6308,7 @@ export const races = {
             dwarf: loc('race_silverblood_solar_dwarf'),
         },
         fanaticism: 'yoki_power',
+        unlocked(){ return true; }, // Expansion: selectable without Mass Extinction
         basic(){ return false; }
     },
     hellspawn: {

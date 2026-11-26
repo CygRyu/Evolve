@@ -36,12 +36,13 @@ A working example is in [`mods/example-starter-pack.json`](mods/example-starter-
 | `races.<key>` | | The race id: lowercase letters, numbers or `_`, 3–24 characters. It must not clash with a base-game race. |
 | `genus` | yes | `humanoid`, `carnivore`, `herbivore`, `small`, `giant`, `reptilian`, `avian`, `insectoid`, `plant`, `fungi`, `aquatic`, `fey`, `heat`, `polar`, `sand`, `demonic`, `angelic`, `eldritch`. |
 | `traits` | yes | 1–4 existing **major** traits. Each takes a rank of 0.1, 0.25, 0.5, 1, 2, 3 or 4. |
+| `unlocked` | | `true` makes the race selectable on the evolution screen from the very first run. |
 | `fanaticism` | | The trait boosted by the Fanaticism tech. Defaults to the first trait. |
 | `solar`, `extinct`, `desc`, `home`, `entity` | | Optional flavour text. Sensible defaults are generated. |
 
 ## How mod races appear
 
-Mod races behave like normal races. They appear on the evolution screen once you reach their genus, if you have the *Mass Extinction* achievement, are seeded, or have already played that race. Otherwise they can roll as the random result of **Sentience**. Each mod race also gets its own extinction achievement.
+Mod races behave like normal races. They appear on the evolution screen once you reach their genus, if you have the *Mass Extinction* achievement, are seeded, have already played that race, or the race sets `"unlocked": true`. Otherwise they can roll as the random result of **Sentience**. Each mod race also gets its own extinction achievement.
 
 ## Safety rules
 
@@ -64,7 +65,7 @@ Next steps could be custom traits (effects scripted from a whitelist of hooks), 
 
 This content is built into the game, not part of a mod pack. The code is in `src/silverblood.js`, with small hooks in other files.
 
-- **Race:** Silverblood (humanoid). Traits: Demon Power, Outcast, and half-rank Regenerative.
+- **Race:** Silverblood (humanoid). Traits: Demon Power, Outcast, and half-rank Regenerative. It can be picked on the evolution screen from the first run, once you take the humanoid path.
 - **Awakening meter**, shown beside Morale. Healthy soldiers fill it slowly, wounded soldiers faster, and each offensive campaign adds 4%. At 100% a warrior becomes an **Awakened One** and the meter drops to 25%. At most 3 can be loose at once.
 - Each Awakened One sometimes kills a soldier and adds 3 stress.
 - **Hunt the Awakened** (Military Complex): your army rating, with some luck, is compared to the monster's strength. A win kills the monster and pays a bounty. A loss costs soldiers but weakens the monster by 20%.
