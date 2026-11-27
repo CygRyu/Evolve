@@ -1,0 +1,1111 @@
+From 386d26fb63035074a483eacb40186ad32b92717d Mon Sep 17 00:00:00 2001
+From: Evolve Expansion <expansion@example.com>
+Date: Fri, 27 Nov 2026 01:55:49 +0700
+Subject: [PATCH] Warriors of the Organization: recruitable elite warriors
+
+- Randomly generated recruits: five stats, perks/flaws, temperament,
+  potential grade, rank; renameable
+- Hiring fee and daily wages; loyalty, desertion and grudges
+- Fire Emblem-style level ups with per-stat growth rates
+- Personal Awakening meter; rest with cooldown; Awakened warriors
+  become named bosses
+- Battle deaths with 5-25% chance to defy death; Hall of the Fallen
+- Hooks into combat rating, hunts, raids, campaigns and stress
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016HmsZNbhLtGaJpfe2FaNeB
+---
+ README.md            |  10 +
+ TESTING.md           |  21 +-
+ src/actions.js       |   4 +-
+ src/civics.js        |   8 +
+ src/main.js          |   4 +-
+ src/silverblood.js   |  84 ++++--
+ src/warriors.js      | 620 +++++++++++++++++++++++++++++++++++++++++++
+ src/wiki/change.js   |  14 +
+ strings/strings.json |  86 +++++-
+ 9 files changed, 818 insertions(+), 33 deletions(-)
+ create mode 100644 src/warriors.js
+
+diff --git a/README.md b/README.md
+index c2a3e4a..1277f1f 100644
+--- a/README.md
++++ b/README.md
+@@ -21,6 +21,16 @@ Humans infused with demon flesh: elite warriors who are slowly becoming the mons
+ - At 100%, a warrior Awakens into a monster that kills soldiers and adds stress until you hunt it down with **Hunt the Awakened**.
+ - **The Organization** (a new building) and **Handlers** (a new job) hold the meter back.
+ 
++**Warriors of the Organization**
++Recruit up to 8 named elite warriors, one slot per Organization, in the Civics, Military tab. It works like Battle Brothers:
++
++- Every recruit is randomly generated, with five stats (Strength, Speed, Control, Sense, Will), perks and flaws, and a temperament.
++- Hiring costs a fee, and every warrior is paid a wage each day. If you can't pay, loyalty drops, and unhappy warriors may desert.
++- Warriors level up from battles, Fire Emblem style: each stat has its own hidden chance to grow on every level up.
++- Each warrior has her own Awakening meter. Resting her lowers it, but she gives no bonuses while resting and still gets paid.
++- Warriors can die in battle, with a 5% to 25% chance to defy death.
++- A warrior who Awakens, deserts or retires unhappy may come back as a named enemy.
++
+ **Endgame: the Abyssal Ones**
+ After building a fortress in Hell, Silverbloods can hunt five ancient Awakened, each stronger than the last. Every kill makes your army stronger for the rest of the run.
+ 
+diff --git a/TESTING.md b/TESTING.md
+index f5af35b..e8c7f9b 100644
+--- a/TESTING.md
++++ b/TESTING.md
+@@ -59,14 +59,27 @@ Notes:
+ 
+ Notes:
+ 
+-## 7. Achievements and wiki
++## 7. Warriors of the Organization
++- [ ] After the first Organization, the **Warriors of the Organization** panel appears in Civics, Military, with 3 recruits.
++- [ ] Hiring takes the fee, and the roster limit equals the number of Organizations (up to 8).
++- [ ] Each day the wages are paid. With no money, a warning appears and loyalty drops.
++- [ ] Rest a warrior: her bonus disappears from combat rating ("Elite Warriors" line), her meter goes down, and the button is locked for 2 minutes.
++- [ ] Rename works and survives a page reload.
++- [ ] After a few hunts, warriors level up, and a message lists which stats grew.
++- [ ] Watch for a death, a "refused to fall" (defied death) message, and an Awakened warrior who then shows up as a named target in Hunt the Awakened.
++- [ ] Retire an unhappy warrior and see whether she comes back later.
++- [ ] Is the wage fair? Early on, it should be noticeable but affordable. Note it late game too.
++
++Notes:
++
++## 8. Achievements and wiki
+ - [ ] Stats → Achievements lists Silver Hunter, Unbroken, Abyss Walker and Beast Country.
+ - [ ] Hovering over the version number (top right) shows the expansion changelog.
+ - [ ] In the wiki, the Silverblood race, the Demon Power trait, The Organization, the two hunts and the Monster-infested planet all have entries.
+ 
+ Notes:
+ 
+-## 8. Saves
++## 9. Saves
+ - [ ] Export a save from the original game and import it here. It loads without errors.
+ - [ ] Reload the page mid-run. The meter, Awakened Ones and Abyssal progress are all kept.
+ 
+@@ -87,3 +100,7 @@ If something feels wrong, these are the numbers to change. All of them are in `s
+ | Abyssal health | `abyssVars.hp` | 4k, 9k, 18k, 36k, 75k |
+ | Abyssal soldier losses | `abyssVars.fury` | 4% to 9% at risk per expedition |
+ | Time between raids | `planetTraits.infested` in `src/races.js` | 600 seconds |
++| Recruit fee | `warriorVars.feeMoneyPct` in `src/warriors.js` | 20% of your Money cap, scaled by quality |
++| Daily wage | `warriorVars.wagePct` | 1% of her fee per day |
++| Warrior army bonus | `warriorVars.armyDivisor` | total Strength / 800 |
++| Death and defy chances | `fights` and `warriorVars.defyBase/defyMax` | see file |
+diff --git a/src/actions.js b/src/actions.js
+index 567f7c5..eab70e1 100644
+--- a/src/actions.js
++++ b/src/actions.js
+@@ -18,7 +18,7 @@ import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js'
+ import { bioseed } from './resets.js';
+ import { loadTab } from './index.js';
+ import { modRaceKeys } from './mods.js';
+-import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt } from './silverblood.js';
++import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt, yokiHuntAvailable } from './silverblood.js';
+ 
+ export const actions = {
+     evolution: {
+@@ -2065,7 +2065,7 @@ export const actions = {
+             reqs: { military: 1 },
+             trait: ['yoki_power'],
+             not_trait: ['cataclysm','lone_survivor'],
+-            condition(){ return yokiState().boss > 0; },
++            condition(){ return yokiHuntAvailable(); },
+             queue_complete(){ return 0; },
+             cost: {},
+             effect(args){ return args && args.isWiki ? '' : yokiHuntEffect(); },
+diff --git a/src/civics.js b/src/civics.js
+index b79d7d3..f85c0e6 100644
+--- a/src/civics.js
++++ b/src/civics.js
+@@ -11,6 +11,7 @@ import { templeCount } from './actions.js';
+ import { astrologySign, astroVal } from './seasons.js';
+ import { warhead } from './resets.js';
+ import { yokiBattle, abyssCombatBonus } from './silverblood.js';
++import { warriorsArmyBonus, warriorsBattle, drawWarriors } from './warriors.js';
+ 
+ // Sets up government in civics tab
+ export function defineGovernment(define){
+@@ -85,6 +86,7 @@ export function defineGarrison(){
+     
+     buildGarrison(garrison,true);
+     defineMad();
++    drawWarriors();
+ }
+ 
+ export function commisionGarrison(){
+@@ -1572,6 +1574,7 @@ function war_campaign(gov){
+     }
+     global.stats.attacks++;
+     yokiBattle();
++    warriorsBattle('campaign', true);
+ 
+     let highLuck = global.race['claws'] ? 20 : 16;
+     let lowLuck = global.race['puny'] ? 3 : 5;
+@@ -2200,6 +2203,11 @@ export function armyRating(val,type,wound,analysis){
+                 army *= 1 + abyss;
+                 data.push({ k: 'abyssal_bd', v: abyss });
+             }
++            let elite = warriorsArmyBonus();
++            if (elite > 0){
++                army *= 1 + elite;
++                data.push({ k: 'sw_army_bd', v: elite });
++            }
+         }
+         let silverFathom = fathomCheck('silverblood');
+         if (silverFathom > 0){
+diff --git a/src/main.js b/src/main.js
+index 6ef544a..ee45bcd 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -14,7 +14,7 @@ import { asphodelResist, mechStationEffect, renderEdenic } from './edenic.js';
+ import { renderTauCeti, syndicate, shipFuelUse, spacePlanetStats, genXYcoord, shipCrewSize, tpStorageMultiplier, tritonWar, sensorRange, erisWar, calcAIDrift, drawMap, tauEnabled, shipCosts, buildTPShipQueue } from './truepath.js';
+ import { arpa, buildArpa, sequenceLabs } from './arpa.js';
+ import { events, eventList } from './events.js';
+-import { yokiTick, yokiStress, awakeningLabel, awakeningTooltip, infestedTick } from './silverblood.js';
++import { yokiTick, yokiStress, yokiStressCut, awakeningLabel, awakeningTooltip, infestedTick } from './silverblood.js';
+ import { defineGovernor, govern, govActive, removeTask } from './governor.js';
+ import { production, highPopAdjust, teamster, factoryBonus } from './prod.js';
+ import { swissKnife } from './tech.js';
+@@ -1526,7 +1526,7 @@ function fastLoop(){
+             if (global.race['outcast']){
+                 army_stress *= 1 + (traits.outcast.vars()[0] / 100);
+             }
+-            army_stress += yokiStress();
++            army_stress = army_stress * (1 - yokiStressCut()) + yokiStress();
+ 
+             stress -= army_stress;
+         }
+diff --git a/src/silverblood.js b/src/silverblood.js
+index 3c8dd0d..d0876cd 100644
+--- a/src/silverblood.js
++++ b/src/silverblood.js
+@@ -13,6 +13,7 @@ import { armyRating, garrisonSize, soldierDeath } from './civics.js';
+ import { messageQueue } from './functions.js';
+ import { unlockAchieve, unlockFeat } from './achieve.js';
+ import { planetTraits } from './races.js';
++import { warriorsTick, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated } from './warriors.js';
+ import { drawCity, initStruct, actions } from './actions.js';
+ 
+ export const yokiVars = {
+@@ -85,12 +86,14 @@ export function yokiTick(){
+         awaken(a);
+     }
+     if (a.abyss.cd > 0){ a.abyss.cd--; }
++    warriorsTick();
+     if (a.woke === 0 && global.tech['space'] && global.tech.space >= 2){
+         unlockAchieve('unbroken');
+     }
+ 
+-    if (a.boss > 0 && global.civic['garrison'] && global.civic.garrison.workers > 0){
+-        for (let i = 0; i < a.boss; i++){
++    let monsters = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
++    if (monsters > 0 && global.civic['garrison'] && global.civic.garrison.workers > 0){
++        for (let i = 0; i < monsters; i++){
+             if (Math.rand(0, yokiVars.rampage) === 0){
+                 soldierDeath(1);
+                 messageQueue(loc('yoki_rampage'),'danger',false,['combat']);
+@@ -126,52 +129,78 @@ export function yokiBattle(){
+ 
+ export function yokiStress(){
+     if (!yokiActive()){ return 0; }
+-    return yokiState().boss * yokiVars.stressPerBoss;
++    let named = global.race['warriors'] ? global.race.warriors.named.length : 0;
++    return (yokiState().boss + named) * yokiVars.stressPerBoss + warriorsStressAdd();
+ }
+ 
+-// The "Hunt the Awakened" action.
++export function yokiStressCut(){
++    if (!yokiActive()){ return 0; }
++    return warriorsStressCut();
++}
++
++export function yokiHuntAvailable(){
++    return yokiActive() && (yokiState().boss > 0 || namedBoss() !== null);
++}
++
++// The "Hunt the Awakened" action. Named bosses (your own fallen warriors) come first.
+ export function yokiHunt(){
+     let a = yokiState();
+-    if (a.boss <= 0){ return false; }
++    let named = namedBoss();
++    if (a.boss <= 0 && !named){ return false; }
+     let wounded = global.civic.garrison.wounded || 0;
+     let ready = garrisonSize() - wounded;
+     if (ready <= 0){
+         messageQueue(loc('yoki_hunt_nosoldiers'),'warning',false,['combat']);
+         return false;
+     }
++    let str = named ? named.str : a.str;
+     let luck = Math.rand(8, 13) / 10;
+-    let army = armyRating(garrisonSize(), 'army', wounded) * luck;
++    let army = armyRating(garrisonSize(), 'army', wounded) * luck * warriorsHuntMult();
++    let lossMult = warriorsLossMult();
+     a.hunts++;
+-    if (army >= a.str){
+-        let killed = Math.min(Math.rand(0, Math.ceil(a.str / 25) + 1), ready);
+-        let hurt = Math.min(Math.rand(0, Math.ceil(a.str / 10) + 1), ready - killed);
++    if (army >= str){
++        let killed = Math.min(Math.round(Math.rand(0, Math.ceil(str / 25) + 1) * lossMult), ready);
++        let hurt = Math.min(Math.round(Math.rand(0, Math.ceil(str / 10) + 1) * lossMult), ready - killed);
+         soldierDeath(killed);
+         global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
+-        let bounty = Math.round(a.str * 60 * (global.city.ptrait.includes('infested') ? 2 : 1));
++        let bounty = Math.round(str * 60 * (global.city.ptrait.includes('infested') ? 2 : 1));
++        global.resource.Money.amount = Math.min(global.resource.Money.max, global.resource.Money.amount + bounty);
+         global.stats['awakened_slain'] = (global.stats['awakened_slain'] || 0) + 1;
+         if (global.stats.awakened_slain >= 50){ unlockAchieve('silver_hunter'); }
+-        global.resource.Money.amount = Math.min(global.resource.Money.max, global.resource.Money.amount + bounty);
+-        a.boss--;
+-        a.str = a.boss > 0 ? newStrength() : 0;
+-        messageQueue(loc('yoki_hunt_win',[killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
+-        if (a.boss === 0){ drawCity(); }
++        if (named){
++            namedDefeated();
++            messageQueue(loc(named.kind === 'rogue' ? 'sw_hunt_rogue_win' : 'sw_hunt_named_win',[named.name, killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
++        }
++        else {
++            a.boss--;
++            a.str = a.boss > 0 ? newStrength() : 0;
++            messageQueue(loc('yoki_hunt_win',[killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
++        }
++        warriorsBattle('hunt', true);
++        if (!yokiHuntAvailable()){ drawCity(); }
+     }
+     else {
+-        let killed = Math.min(Math.rand(2, Math.ceil(a.str / 12) + 3), ready);
+-        let hurt = Math.min(Math.rand(1, Math.ceil(a.str / 8) + 2), ready - killed);
++        let killed = Math.min(Math.round(Math.rand(2, Math.ceil(str / 12) + 3) * lossMult), ready);
++        let hurt = Math.min(Math.round(Math.rand(1, Math.ceil(str / 8) + 2) * lossMult), ready - killed);
+         soldierDeath(killed);
+         global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
+         // The beast is hurt too, so each failed hunt makes the next one easier.
+-        a.str = Math.max(1, Math.round(a.str * 0.8));
++        if (named){ named.str = Math.max(1, Math.round(named.str * 0.8)); }
++        else { a.str = Math.max(1, Math.round(a.str * 0.8)); }
+         messageQueue(loc('yoki_hunt_loss',[killed, hurt]),'danger',false,['combat']);
++        warriorsBattle('hunt', false);
+     }
+     return false;
+ }
+ 
+ export function yokiHuntEffect(){
+     let a = yokiState();
+-    let army = global.civic['garrison'] ? Math.round(armyRating(garrisonSize(), 'army', global.civic.garrison.wounded)) : 0;
+-    return `<div>${loc('city_hunt_awakened_effect',[a.boss])}</div><div class="has-text-caution">${loc('city_hunt_awakened_effect2',[Math.round(a.str), army])}</div>`;
++    let named = namedBoss();
++    let army = global.civic['garrison'] ? Math.round(armyRating(garrisonSize(), 'army', global.civic.garrison.wounded) * warriorsHuntMult()) : 0;
++    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
++    let desc = `<div>${loc('city_hunt_awakened_effect',[total])}</div>`;
++    if (named){ desc += `<div class="has-text-danger">${loc(named.kind === 'rogue' ? 'sw_hunt_target_rogue' : 'sw_hunt_target_named',[named.name])}</div>`; }
++    return desc + `<div class="has-text-caution">${loc('city_hunt_awakened_effect2',[Math.round(named ? named.str : a.str), army])}</div>`;
+ }
+ 
+ // Text for the race header.
+@@ -179,7 +208,8 @@ export function awakeningLabel(){
+     if (!yokiActive()){ return ''; }
+     let a = yokiState();
+     let label = `${loc('yoki_meter')} ${Math.floor(a.m)}%`;
+-    if (a.boss > 0){ label += ` (${a.boss})`; }
++    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
++    if (total > 0){ label += ` (${total})`; }
+     return label;
+ }
+ 
+@@ -189,7 +219,8 @@ export function awakeningTooltip(){
+     let fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2);
+     let tip = loc('yoki_meter_tooltip',[fmt(r.gain), fmt(-r.calm), fmt(r.net)]);
+     let a = yokiState();
+-    if (a.boss > 0){ tip += ' ' + loc('yoki_boss_count',[a.boss]); }
++    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
++    if (total > 0){ tip += ' ' + loc('yoki_boss_count',[total]); }
+     return tip;
+ }
+ 
+@@ -218,6 +249,7 @@ export function demonRaid(){
+         let bounty = Math.round(strength * 25);
+         global.resource.Money.amount = Math.min(global.resource.Money.max, global.resource.Money.amount + bounty);
+         messageQueue(loc('infested_raid_win',[hurt, bounty.toLocaleString()]),'warning',false,['combat']);
++        warriorsBattle('raid', true);
+     }
+     else {
+         let killed = Math.min(Math.rand(1, Math.ceil(strength / 12) + 2), global.civic.garrison.workers);
+@@ -231,6 +263,7 @@ export function demonRaid(){
+             }
+         });
+         messageQueue(loc('infested_raid_loss',[killed, lost.join(', ') || loc('infested_raid_nothing')]),'danger',false,['combat']);
++        warriorsBattle('raid', false);
+     }
+ }
+ 
+@@ -297,15 +330,16 @@ export function abyssHunt(){
+     }
+     let i = ab.slain;
+     let name = loc(`abyssal_${i}`);
+-    let dmg = Math.round(armyRating(garrisonSize(), 'army', wounded) * Math.rand(8, 13) / 10);
+-    let risk = Math.ceil(ready * abyssVars.fury[i] * Math.rand(5, 16) / 10);
++    let dmg = Math.round(armyRating(garrisonSize(), 'army', wounded) * Math.rand(8, 13) / 10 * warriorsHuntMult());
++    let risk = Math.ceil(ready * abyssVars.fury[i] * Math.rand(5, 16) / 10 * warriorsLossMult());
+     let killed = Math.min(Math.ceil(risk / 2), ready);
+     let hurt = Math.min(risk - killed, ready - killed);
+     soldierDeath(killed);
+     global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
+     ab.hp -= dmg;
+-    ab.cd = abyssVars.cooldown;
++    ab.cd = Math.round(abyssVars.cooldown * warriorsCdMult());
+     yokiBattle();
++    warriorsBattle('abyss', ab.hp <= 0);
+ 
+     if (ab.hp <= 0){
+         ab.slain++;
+diff --git a/src/warriors.js b/src/warriors.js
+new file mode 100644
+index 0000000..e5f757c
+--- /dev/null
++++ b/src/warriors.js
+@@ -0,0 +1,620 @@
++// Expansion: Silverblood warriors.
++//
++// Recruitable named warriors with random stats, Fire Emblem-style growth
++// rates, perks, temperament and loyalty. Each has her own Awakening meter.
++// Warriors can be rested, retired, killed (with a chance to defy death),
++// Awaken into named bosses, or turn on you out of a grudge.
++//
++// State: global.race.warriors (per run), global.stats.silver_hall (across runs).
++
++import { global, sizeApproximation } from './vars.js';
++import { loc } from './locale.js';
++import { vBind, messageQueue, clearElement } from './functions.js';
++import { yokiActive, yokiState } from './silverblood.js';
++
++// ---------------------------------------------------------------------------
++// Tuning
++// ---------------------------------------------------------------------------
++
++export const warriorVars = {
++    stats: ['str','spd','ctl','sns','wil'],
++    maxSlots: 8,
++    poolSize: 3,
++    poolRefreshDays: 30,
++    refreshCostPct: 0.1,      // paid refresh, share of the average fee
++    feeMin: 400,
++    feeMoneyPct: 0.2,         // fee scales with your Money cap
++    wagePct: 0.01,            // daily wage, share of the hiring fee
++    wageLevelPct: 0.08,       // +8% wage per level above 1
++    xpPerLevel: 100,
++    maxLevel: 20,
++    growMin: 2,               // stat gain on a successful growth roll
++    growMax: 5,
++    restCooldown: 120,        // seconds between rest/activate switches
++    restDecay: 3,             // personal meter lost per day while resting
++    activeGain: 0.2,          // personal meter gained per day while active
++    armyDivisor: 800,         // army bonus = total might / this
++    senseDivisor: 500,        // hunt damage bonus = total sense / this
++    willDivisor: 1000,        // army stress reduction = total will / this (max 50%)
++    speedCdCut: 1000,         // abyss cooldown cut = total speed / this (max 50%)
++    defyBase: 5,
++    defyMax: 25,
++};
++
++const fights = {
++    // [meter gain, xp win, xp loss, death% win, death% loss]
++    hunt:     [6, 40, 20, 2, 10],
++    abyss:    [10, 50, 50, 4, 4],
++    raid:     [3, 15, 10, 0.5, 3],
++    campaign: [2, 10, 10, 0, 0],
++};
++
++export const perkList = {
++    quick_draw:    { good: true },  // +10% hunt damage each
++    defensive:     { good: true },  // -25% soldier losses in hunts each (max 75%)
++    loyal:         { good: true },  // -30% wage, +20 starting loyalty
++    iron_control:  { good: true },  // personal meter gain x0.6
++    prodigy:       { good: true },  // +15 to all growth rates
++    unyielding:    { good: true },  // +10% defy death
++    veteran:       { good: true },  // starts at level 3
++    hot_headed:    { good: false }, // +20 str growth, personal meter gain x2
++    haunted:       { good: false }, // +15 sense, +1 army stress
++    greedy:        { good: false }, // +40% wage, double loyalty loss when unpaid
++    frail_mind:    { good: false }, // -20 control growth
++    grudge_bearer: { good: false }, // double loyalty losses
++};
++
++export const temperaments = {
++    stoic:    { start: 55, gain: 0.5, loss: 0.5, rogue: 1 },
++    proud:    { start: 50, gain: 1,   loss: 1,   rogue: 1 },   // dislikes resting
++    gentle:   { start: 65, gain: 2,   loss: 1.5, rogue: 0.5 }, // feels comrades' deaths more
++    volatile: { start: 45, gain: 1,   loss: 1.5, rogue: 2 },
++};
++
++const names = [
++    'Ilsa','Mirren','Vael','Corra','Sefa','Ondine','Kaelis','Rhosyn','Tamsin','Liesel',
++    'Brenna','Isolde','Maren','Velka','Saoirse','Edda','Ysolde','Nerys','Calla','Thessaly',
++    'Wren','Astrid','Halvey','Ilka','Jorunn','Kestrel','Lisbet','Marit','Noor','Orla',
++    'Petra','Quilla','Runa','Sigrun','Tove','Ulla','Verity','Wilhelmina','Yrsa','Zelde',
++    'Agna','Branwen','Cerys','Dagny','Elske','Fenna','Greta','Hedda','Inga','Jessamy'
++];
++
++// ---------------------------------------------------------------------------
++// State
++// ---------------------------------------------------------------------------
++
++export function warriorState(){
++    if (!global.race['warriors']){
++        global.race['warriors'] = { roster: [], pool: [], refresh: 0, nextId: 1, lastDay: global.stats.days || 0, named: [], grudges: [], msg: '' };
++    }
++    let w = global.race.warriors;
++    ['roster','pool','named','grudges'].forEach(k => { if (!Array.isArray(w[k])){ w[k] = []; } });
++    return w;
++}
++
++function hall(){
++    if (!Array.isArray(global.stats['silver_hall'])){ global.stats['silver_hall'] = []; }
++    return global.stats.silver_hall;
++}
++
++function addHall(wr, fate){
++    let h = hall();
++    h.unshift({ n: wr.name, r: rankOf(wr), l: wr.lvl, f: fate, d: global.stats.days || 0 });
++    if (h.length > 50){ h.length = 50; }
++}
++
++export function slots(){
++    let orgs = global.city['organization'] ? global.city.organization.count : 0;
++    return Math.min(warriorVars.maxSlots, orgs);
++}
++
++export function active(){
++    if (!yokiActive() || !global.race['warriors']){ return []; }
++    return global.race.warriors.roster.filter(x => x.status === 'active');
++}
++
++function rand(min, max){ return Math.rand(min, max + 1); } // inclusive
++function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
++function pick(list){ return list[Math.rand(0, list.length)]; }
++
++// ---------------------------------------------------------------------------
++// Generation
++// ---------------------------------------------------------------------------
++
++export function might(wr){
++    return wr.stats.str * (1 + 0.05 * (wr.lvl - 1));
++}
++
++export function rankOf(wr){
++    let power = warriorVars.stats.reduce((t, s) => t + wr.stats[s], 0) + 8 * (wr.lvl - 1);
++    return clamp(47 - Math.floor((power - 150) / 9), 1, 47);
++}
++
++export function potential(wr){
++    let avg = warriorVars.stats.reduce((t, s) => t + wr.growth[s], 0) / warriorVars.stats.length;
++    return avg >= 60 ? 'S' : avg >= 50 ? 'A' : avg >= 40 ? 'B' : avg >= 30 ? 'C' : 'D';
++}
++
++function rollStat(){
++    // Average of two rolls: most warriors are middling, standouts are rare.
++    return Math.round((rand(10, 90) + rand(10, 90)) / 2);
++}
++
++function rollPerks(){
++    let good = Object.keys(perkList).filter(p => perkList[p].good);
++    let bad = Object.keys(perkList).filter(p => !perkList[p].good);
++    let perks = [pick(good)];
++    if (Math.rand(0, 100) < 40){
++        let second = pick(good);
++        if (!perks.includes(second)){ perks.push(second); }
++    }
++    if (Math.rand(0, 100) < 35){ perks.push(pick(bad)); }
++    return perks;
++}
++
++function feeFor(stats){
++    let sum = warriorVars.stats.reduce((t, s) => t + stats[s], 0);
++    let q = sum / 250;
++    let base = Math.max(warriorVars.feeMin, (global.resource.Money.max || 0) * warriorVars.feeMoneyPct);
++    return Math.round(base * q * q);
++}
++
++export function makeWarrior(){
++    let w = warriorState();
++    let stats = {}, growth = {};
++    warriorVars.stats.forEach(s => {
++        stats[s] = rollStat();
++        growth[s] = rand(20, 70);
++    });
++    let perks = rollPerks();
++    if (perks.includes('prodigy')){ warriorVars.stats.forEach(s => growth[s] += 15); }
++    if (perks.includes('hot_headed')){ growth.str += 20; }
++    if (perks.includes('frail_mind')){ growth.ctl = Math.max(5, growth.ctl - 20); }
++    if (perks.includes('haunted')){ stats.sns = Math.min(100, stats.sns + 15); }
++    let temper = pick(Object.keys(temperaments));
++    let used = w.roster.concat(w.pool).map(x => x.name);
++    let free = names.filter(n => !used.includes(n));
++    let wr = {
++        id: w.nextId++,
++        name: free.length ? pick(free) : pick(names),
++        lvl: 1, xp: 0,
++        stats, growth, perks,
++        temper,
++        loyalty: clamp(temperaments[temper].start + (perks.includes('loyal') ? 20 : 0), 0, 100),
++        meter: 0,
++        status: 'active',
++        cd: 0,
++        unpaid: 0,
++        fee: 0, wage: 0
++    };
++    if (perks.includes('veteran')){
++        for (let i = 0; i < 2; i++){ levelUp(wr, true); }
++    }
++    wr.fee = feeFor(wr.stats);
++    wr.wage = baseWage(wr);
++    return wr;
++}
++
++function baseWage(wr){
++    let wage = wr.fee * warriorVars.wagePct * (1 + warriorVars.wageLevelPct * (wr.lvl - 1));
++    if (wr.perks.includes('loyal')){ wage *= 0.7; }
++    if (wr.perks.includes('greedy')){ wage *= 1.4; }
++    return Math.max(1, Math.round(wage));
++}
++
++export function refreshPool(paid){
++    let w = warriorState();
++    if (paid){
++        let cost = refreshCost();
++        if (global.resource.Money.amount < cost){ return false; }
++        global.resource.Money.amount -= cost;
++    }
++    w.pool.splice(0, w.pool.length);
++    for (let i = 0; i < warriorVars.poolSize; i++){ w.pool.push(makeWarrior()); }
++    w.refresh = warriorVars.poolRefreshDays;
++    return true;
++}
++
++export function refreshCost(){
++    let w = warriorState();
++    let avg = w.pool.length ? w.pool.reduce((t, x) => t + x.fee, 0) / w.pool.length : warriorVars.feeMin;
++    return Math.round(avg * warriorVars.refreshCostPct);
++}
++
++// ---------------------------------------------------------------------------
++// Leveling (Fire Emblem style: each stat rolls its own growth chance)
++// ---------------------------------------------------------------------------
++
++function levelUp(wr, silent){
++    if (wr.lvl >= warriorVars.maxLevel){ return []; }
++    wr.lvl++;
++    let gains = [];
++    warriorVars.stats.forEach(s => {
++        if (Math.rand(0, 100) < wr.growth[s] && wr.stats[s] < 100){
++            let g = rand(warriorVars.growMin, warriorVars.growMax);
++            wr.stats[s] = Math.min(100, wr.stats[s] + g);
++            gains.push(`${loc(`sw_stat_${s}`)} +${g}`);
++        }
++    });
++    wr.wage = baseWage(wr);
++    if (!silent){
++        messageQueue(loc('sw_levelup',[wr.name, wr.lvl, gains.length ? gains.join(', ') : loc('sw_levelup_none')]),'success',false,['combat']);
++    }
++    return gains;
++}
++
++function gainXp(wr, xp){
++    if (wr.lvl >= warriorVars.maxLevel){ return; }
++    wr.xp += xp;
++    while (wr.xp >= warriorVars.xpPerLevel && wr.lvl < warriorVars.maxLevel){
++        wr.xp -= warriorVars.xpPerLevel;
++        levelUp(wr);
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Player actions
++// ---------------------------------------------------------------------------
++
++export function hire(id){
++    let w = warriorState();
++    let idx = w.pool.findIndex(x => x.id === id);
++    if (idx < 0 || w.roster.length >= slots()){ return false; }
++    let wr = w.pool[idx];
++    if (global.resource.Money.amount < wr.fee){ return false; }
++    global.resource.Money.amount -= wr.fee;
++    w.pool.splice(idx, 1);
++    w.roster.push(wr);
++    messageQueue(loc('sw_hired',[wr.name, rankOf(wr)]),'success',false,['combat']);
++    return true;
++}
++
++export function toggleRest(id){
++    let wr = warriorState().roster.find(x => x.id === id);
++    if (!wr || wr.cd > 0){ return false; }
++    wr.status = wr.status === 'active' ? 'resting' : 'active';
++    wr.cd = warriorVars.restCooldown;
++    return true;
++}
++
++export function rename(id, name){
++    let wr = warriorState().roster.find(x => x.id === id);
++    if (!wr || typeof name !== 'string'){ return; }
++    let clean = name.replace(/[<>]/g, '').trim().slice(0, 24);
++    if (clean.length){ wr.name = clean; }
++}
++
++export function retire(id){
++    let w = warriorState();
++    let idx = w.roster.findIndex(x => x.id === id);
++    if (idx < 0){ return; }
++    let wr = w.roster[idx];
++    w.roster.splice(idx, 1);
++    addHall(wr, 'retired');
++    // A warrior who leaves unhappy may come back for revenge.
++    let chance = Math.max(0, 40 - wr.loyalty) * 2.5 * temperaments[wr.temper].rogue;
++    if (Math.rand(0, 100) < chance){
++        w.grudges.push({ name: wr.name, str: bossStrength(wr, 1.2), due: (global.stats.days || 0) + rand(60, 200) });
++    }
++    messageQueue(loc('sw_retired',[wr.name]),'info',false,['combat']);
++}
++
++// ---------------------------------------------------------------------------
++// Bosses made from your own warriors
++// ---------------------------------------------------------------------------
++
++function techFactor(){
++    return global.tech['high_tech'] ? global.tech['high_tech'] + 1 : 1;
++}
++
++function bossStrength(wr, mult){
++    return Math.round((might(wr) * 2 + wr.lvl * 10) * mult * techFactor());
++}
++
++function turnBoss(wr, kind, mult){
++    let w = warriorState();
++    w.named.push({ name: wr.name, str: bossStrength(wr, mult), kind });
++}
++
++export function namedBoss(){
++    let w = global.race['warriors'];
++    return w && w.named.length ? w.named[0] : null;
++}
++
++export function namedDefeated(){
++    let w = warriorState();
++    let b = w.named.shift();
++    if (b){ addHall({ name: b.name, lvl: 0, stats: { str: 0, spd: 0, ctl: 0, sns: 0, wil: 0 } }, b.kind === 'rogue' ? 'slain_rogue' : 'slain_awakened'); }
++    return b;
++}
++
++function moraleHit(amount, except){
++    warriorState().roster.forEach(o => {
++        if (o.id !== except){
++            changeLoyalty(o, -amount * (o.temper === 'gentle' ? 1.5 : 1));
++        }
++    });
++}
++
++function changeLoyalty(wr, delta){
++    let t = temperaments[wr.temper];
++    if (delta < 0){
++        delta *= t.loss;
++        if (wr.perks.includes('grudge_bearer')){ delta *= 2; }
++    }
++    else {
++        delta *= t.gain;
++    }
++    wr.loyalty = clamp(wr.loyalty + delta, 0, 100);
++}
++
++function awaken(wr){
++    let w = warriorState();
++    w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
++    turnBoss(wr, 'awakened', 1);
++    addHall(wr, 'awakened');
++    yokiState().woke++;
++    moraleHit(3, wr.id);
++    messageQueue(loc('sw_awakened',[wr.name]),'danger',false,['combat']);
++}
++
++// ---------------------------------------------------------------------------
++// Ticks
++// ---------------------------------------------------------------------------
++
++// Every game second (from yokiTick).
++export function warriorsTick(){
++    if (!yokiActive()){ return; }
++    let w = warriorState();
++    w.roster.forEach(wr => { if (wr.cd > 0){ wr.cd--; } });
++    if (slots() > 0 && w.pool.length === 0 && w.refresh <= 0){
++        refreshPool(false);
++    }
++    let today = global.stats.days || 0;
++    if (today !== w.lastDay){
++        let n = Math.max(0, Math.min(10, today - w.lastDay));
++        w.lastDay = today;
++        for (let i = 0; i < n; i++){ dailyTick(w); }
++    }
++}
++
++function meterMult(wr){
++    let m = 1.5 - wr.stats.ctl / 100;
++    if (wr.perks.includes('hot_headed')){ m *= 2; }
++    if (wr.perks.includes('iron_control')){ m *= 0.6; }
++    return Math.max(0.1, m);
++}
++
++function dailyTick(w){
++    if (w.refresh > 0){ w.refresh--; }
++    if (w.refresh <= 0 && slots() > 0){ refreshPool(false); }
++
++    // Wages, loyalty, meters
++    w.roster.slice().forEach(wr => {
++        if (global.resource.Money.amount >= wr.wage){
++            global.resource.Money.amount -= wr.wage;
++            wr.unpaid = 0;
++            changeLoyalty(wr, 0.3);
++        }
++        else {
++            wr.unpaid++;
++            changeLoyalty(wr, wr.perks.includes('greedy') ? -8 : -4);
++            if (wr.unpaid === 1){ messageQueue(loc('sw_unpaid',[wr.name]),'warning',false,['combat']); }
++        }
++        if (wr.status === 'resting'){
++            wr.meter = Math.max(0, wr.meter - warriorVars.restDecay);
++            if (wr.temper === 'proud'){ changeLoyalty(wr, -0.4); }
++        }
++        else {
++            wr.meter += warriorVars.activeGain * meterMult(wr);
++        }
++        if (wr.meter >= 100){ awaken(wr); return; }
++
++        // Desertion
++        if ((wr.loyalty < 10 || (wr.loyalty < 20 && wr.unpaid >= 3)) && Math.rand(0, 100) < 3){
++            w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
++            addHall(wr, 'deserted');
++            let rogue = (wr.loyalty < 5 ? 60 : 30) * temperaments[wr.temper].rogue;
++            if (Math.rand(0, 100) < rogue){
++                w.grudges.push({ name: wr.name, str: bossStrength(wr, 1.2), due: (global.stats.days || 0) + rand(30, 90) });
++            }
++            messageQueue(loc('sw_deserted',[wr.name]),'danger',false,['combat']);
++        }
++    });
++
++    // Old grudges come due
++    let today = global.stats.days || 0;
++    for (let i = w.grudges.length - 1; i >= 0; i--){
++        if (today >= w.grudges[i].due){
++            let g = w.grudges.splice(i, 1)[0];
++            w.named.push({ name: g.name, str: g.str, kind: 'rogue' });
++            messageQueue(loc('sw_grudge',[g.name]),'danger',false,['combat']);
++        }
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Combat hooks
++// ---------------------------------------------------------------------------
++
++export function warriorsArmyBonus(){
++    let total = active().reduce((t, wr) => t + might(wr), 0);
++    return total / warriorVars.armyDivisor;
++}
++
++export function warriorsHuntMult(){
++    let a = active();
++    let sense = a.reduce((t, wr) => t + wr.stats.sns, 0) / warriorVars.senseDivisor;
++    let quick = a.filter(wr => wr.perks.includes('quick_draw')).length * 0.1;
++    return 1 + sense + quick;
++}
++
++export function warriorsLossMult(){
++    let def = active().filter(wr => wr.perks.includes('defensive')).length * 0.25;
++    return 1 - Math.min(0.75, def);
++}
++
++export function warriorsStressCut(){
++    let will = active().reduce((t, wr) => t + wr.stats.wil, 0) / warriorVars.willDivisor;
++    return Math.min(0.5, will);
++}
++
++export function warriorsStressAdd(){
++    return active().filter(wr => wr.perks.includes('haunted')).length;
++}
++
++export function warriorsCdMult(){
++    let spd = active().reduce((t, wr) => t + wr.stats.spd, 0) / warriorVars.speedCdCut;
++    return 1 - Math.min(0.5, spd);
++}
++
++function defyChance(wr){
++    let c = warriorVars.defyBase + (wr.stats.wil + wr.stats.ctl) / 10;
++    if (wr.perks.includes('unyielding')){ c += 10; }
++    return clamp(c, warriorVars.defyBase, warriorVars.defyMax);
++}
++
++// Called after any fight. kind: hunt | abyss | raid | campaign
++export function warriorsBattle(kind, won){
++    if (!yokiActive()){ return; }
++    let f = fights[kind];
++    if (!f){ return; }
++    let w = warriorState();
++    active().forEach(wr => {
++        // Death check
++        let death = (won ? f[3] : f[4]) * (1.25 - wr.stats.spd / 200);
++        if (death > 0 && Math.rand(0, 10000) < death * 100){
++            if (Math.rand(0, 100) < defyChance(wr)){
++                wr.meter += 20;
++                messageQueue(loc('sw_defied',[wr.name]),'special',false,['combat']);
++            }
++            else {
++                w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
++                addHall(wr, 'fell');
++                moraleHit(3, wr.id);
++                messageQueue(loc('sw_fell',[wr.name]),'danger',false,['combat']);
++                return;
++            }
++        }
++        wr.meter += f[0] * meterMult(wr);
++        changeLoyalty(wr, won ? 1 : -1);
++        gainXp(wr, won ? f[1] : f[2]);
++        if (wr.meter >= 100){ awaken(wr); }
++    });
++}
++
++// ---------------------------------------------------------------------------
++// UI (Civics → Military)
++// ---------------------------------------------------------------------------
++
++export function drawWarriors(){
++    let el = $('#silverWarriors');
++    if (el.length){ clearElement(el); el.remove(); }
++    if (!global.race['yoki_power'] || global.race['warlord']){ return; }
++    let w = warriorState();
++
++    let panel = $(`<div id="silverWarriors" class="tile is-child" v-show="unlocked()" style="margin-top: 1rem; display: block;"></div>`);
++    $('#military').append(panel);
++
++    let statRow = (src) => warriorVars.stats.map(s => `
++        <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem;">
++            <span style="width:4.5rem" class="has-text-label">${loc(`sw_stat_${s}`)}</span>
++            <span style="flex:1; height:0.5rem; background:rgba(128,128,128,0.25); border-radius:2px;"><span :style="{display:'block', height:'100%', width: ${src}.stats.${s} + '%', background:'currentColor'}" class="has-text-info"></span></span>
++            <span style="width:2rem; text-align:right">{{ ${src}.stats.${s} }}</span>
++        </div>`).join('');
++
++    let perkChips = (src) => `<span v-for="p in ${src}.perks" :key="p" :title="perkDesc(p)" :class="perkClass(p)" style="margin-right:0.5rem; font-size:0.85rem;">{{ perkName(p) }}</span>`;
++
++    panel.append(`
++        <h2 class="has-text-warning">${loc('sw_title')} <span class="has-text-label" style="font-size:0.9rem">({{ w.roster.length }} / {{ slots() }})</span></h2>
++        <div class="has-text-label" style="font-size:0.85rem; margin-bottom:0.5rem">${loc('sw_intro')}</div>
++
++        <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
++            <div v-for="wr in w.roster" :key="wr.id" style="border:1px solid rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem;">
++                <div style="display:flex; justify-content:space-between">
++                    <span><b class="has-text-warning">{{ wr.name }}</b> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
++                    <span>${loc('sw_level')} {{ wr.lvl }} <span class="has-text-label" style="font-size:0.8rem">({{ wr.xp }}/${warriorVars.xpPerLevel})</span></span>
++                </div>
++                <div style="font-size:0.85rem">
++                    <span :class="wr.status === 'active' ? 'has-text-success' : 'has-text-caution'">{{ wr.status === 'active' ? '${loc('sw_active')}' : '${loc('sw_resting')}' }}</span>
++                    · {{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}
++                </div>
++                ${statRow('wr')}
++                <div>${perkChips('wr')}</div>
++                <div style="font-size:0.85rem">${loc('sw_loyalty')}: <span :class="loyClass(wr)">{{ Math.round(wr.loyalty) }} ({{ mood(wr) }})</span></div>
++                <div style="font-size:0.85rem">${loc('sw_meter')}: <span :class="wr.meter >= 75 ? 'has-text-danger' : 'has-text-warning'">{{ Math.floor(wr.meter) }}%</span></div>
++                <div style="font-size:0.85rem">${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}<span v-if="wr.unpaid > 0" class="has-text-danger"> (${loc('sw_unpaid_short')} {{ wr.unpaid }})</span></div>
++                <div style="margin-top:0.4rem; display:flex; gap:0.3rem;">
++                    <button class="button is-small" :disabled="wr.cd > 0" @click="rest(wr.id)">{{ wr.cd > 0 ? wr.cd + 's' : (wr.status === 'active' ? '${loc('sw_rest')}' : '${loc('sw_activate')}') }}</button>
++                    <button class="button is-small" @click="renameW(wr)">${loc('sw_rename')}</button>
++                    <button class="button is-small" @click="retireW(wr)">${loc('sw_retire')}</button>
++                </div>
++            </div>
++        </div>
++
++        <h3 class="has-text-warning" style="margin-top:1rem">${loc('sw_recruits')}
++            <span class="has-text-label" style="font-size:0.85rem">${loc('sw_refresh_in')} {{ w.refresh }} ${loc('sw_days')}</span>
++            <button class="button is-small" style="margin-left:0.5rem" @click="refresh()">${loc('sw_refresh')} (\${{ money(refreshCost()) }})</button>
++        </h3>
++        <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
++            <div v-for="wr in w.pool" :key="wr.id" style="border:1px dashed rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem;">
++                <div style="display:flex; justify-content:space-between">
++                    <span><b>{{ wr.name }}</b> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
++                    <span>${loc('sw_level')} {{ wr.lvl }}</span>
++                </div>
++                <div style="font-size:0.85rem">{{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}</div>
++                ${statRow('wr')}
++                <div>${perkChips('wr')}</div>
++                <div style="font-size:0.85rem">${loc('sw_fee')}: \${{ money(wr.fee) }} · ${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}</div>
++                <button class="button is-small" style="margin-top:0.4rem" :disabled="w.roster.length >= slots() || !afford(wr.fee)" @click="hireW(wr.id)">${loc('sw_hire')}</button>
++            </div>
++        </div>
++
++        <div v-if="hallList().length" style="margin-top:1rem">
++            <h3 class="has-text-warning">${loc('sw_hall')}</h3>
++            <div v-for="(h, i) in hallList()" :key="i" style="font-size:0.85rem">
++                <b>{{ h.n }}</b><span v-if="h.l"> (No. {{ h.r }}, ${loc('sw_level')} {{ h.l }})</span>: {{ fate(h.f) }}
++            </div>
++        </div>
++    `);
++
++    vBind({
++        el: '#silverWarriors',
++        data: { w: w },
++        methods: {
++            unlocked(){ return yokiActive() && slots() > 0; },
++            slots(){ return slots(); },
++            rank(wr){ return rankOf(wr); },
++            pot(wr){ return potential(wr); },
++            money(v){ return sizeApproximation(v, 1); },
++            afford(v){ return global.resource.Money.amount >= v; },
++            perkName(p){ return loc(`sw_perk_${p}`); },
++            perkDesc(p){ return loc(`sw_perk_${p}_desc`); },
++            perkClass(p){ return perkList[p] && perkList[p].good ? 'has-text-success' : 'has-text-danger'; },
++            temperName(t){ return loc(`sw_temper_${t}`); },
++            mood(wr){ return wr.loyalty >= 75 ? loc('sw_mood_devoted') : wr.loyalty >= 50 ? loc('sw_mood_content') : wr.loyalty >= 25 ? loc('sw_mood_uneasy') : loc('sw_mood_resentful'); },
++            loyClass(wr){ return wr.loyalty >= 50 ? 'has-text-success' : wr.loyalty >= 25 ? 'has-text-warning' : 'has-text-danger'; },
++            fate(f){ return loc(`sw_fate_${f}`); },
++            hallList(){ return hall().slice(0, 15); },
++            refreshCost(){ return refreshCost(); },
++            refresh(){ refreshPool(true); },
++            hireW(id){ hire(id); },
++            rest(id){ toggleRest(id); },
++            renameW(wr){
++                this.$buefy.dialog.prompt({
++                    message: loc('sw_rename_prompt'),
++                    inputAttrs: { value: wr.name, maxlength: 24 },
++                    trapFocus: true,
++                    onConfirm: (value) => rename(wr.id, value)
++                });
++            },
++            retireW(wr){
++                this.$buefy.dialog.confirm({
++                    message: loc('sw_retire_confirm',[wr.name]),
++                    confirmText: loc('sw_retire'),
++                    onConfirm: () => retire(wr.id)
++                });
++            }
++        }
++    });
++}
+diff --git a/src/wiki/change.js b/src/wiki/change.js
+index d0421b4..4627559 100644
+--- a/src/wiki/change.js
++++ b/src/wiki/change.js
+@@ -3,6 +3,20 @@ import { clearElement } from './../functions.js';
+ 
+ export const changeList = [
+     { // Fan expansion (not part of the official game)
++        version: `1.4.10`,
++        revision: ` Silverblood Expansion v1.1`,
++        date: `11/27/2026`,
++        changes: [
++            `Warriors of the Organization: recruit named elite warriors in Civics, Military. One slot per Organization, up to 8.`,
++            `Each warrior has random stats (Strength, Speed, Control, Sense, Will), perks, a temperament and a potential grade.`,
++            `Warriors level up from battles. Each stat has its own hidden chance to grow on every level up.`,
++            `Hiring costs a fee, and warriors are paid a wage every day. Unpaid warriors lose loyalty.`,
++            `Each warrior has her own Awakening meter. Rest her to lower it, at the cost of her bonuses.`,
++            `Warriors can die in battle, with a 5% to 25% chance to defy death. Fallen warriors are remembered in the Hall of the Fallen.`,
++            `Warriors who Awaken, desert or retire unhappy may come back as named enemies.`
++        ]
++    },
++    {
+         version: `1.4.10`,
+         revision: ` Silverblood Expansion v1.0`,
+         date: `11/27/2026`,
+diff --git a/strings/strings.json b/strings/strings.json
+index b0e8b71..159f329 100644
+--- a/strings/strings.json
++++ b/strings/strings.json
+@@ -11729,10 +11729,92 @@
+   "abyssal_4_desc": "The demon whose blood made the Silverbloods. All Awakening leads back to it.",
+   "city_abyss_hunt_generic": "Hunt the Abyssal Ones",
+   "wiki_structure_planetary_silverblood_only": "Only available to races with the Demon Power trait (Silverblood).",
+-  "wiki_structure_planetary_organization": "Each Organization lowers the Awakening meter by 0.03% per second and allows one Handler. Each Handler lowers it by a further 0.06% per second.",
++  "wiki_structure_planetary_organization": "Each Organization lowers the Awakening meter by 0.03% per second and allows one Handler. Each Handler lowers it by a further 0.06% per second. Each Organization also adds one warrior slot (up to 8) in Civics, Military.",
+   "wiki_structure_planetary_hunt_awakened": "Appears while an Awakened One is at large. Your army rating (with 80% to 120% luck) is compared to the monster's strength. Win: the monster dies and pays a bounty (doubled on Monster-infested planets). Lose: you lose soldiers, but the monster is 20% weaker for the next attempt.",
+   "wiki_structure_planetary_abyss_hunt": "Unlocked once you build a fortress in Hell. Each expedition deals damage equal to your army rating (with luck) and costs a share of your soldiers. Your army needs 60 seconds to regroup between expeditions. Each Abyssal One slain gives +5% combat rating and 10% slower Awakening for the rest of the run, and fills your treasury.",
+   "wiki_structure_planetary_abyss_hunt_list": "The Abyssal Ones, in order: Morvaine, the Hollow King (4,000 health); Seskari of the Drowned Deep (9,000); The Pale Wolf of Ironwood (18,000); Vethra, the Weeping Spire (36,000); Ul-Abyss, the First Dark (75,000).",
+   "wiki_trait_effect_yoki_power_ex1": "Soldiers slowly fill the Awakening meter (wounded soldiers faster, and each offensive campaign adds 4%). At 100% a warrior Awakens into a monster that kills soldiers and adds stress until it is hunted down. Up to 3 can be at large at once.",
+-  "wiki_trait_effect_yoki_power_ex2": "The Organization building and the Handler job hold the meter back. After building a fortress in Hell, you can hunt the five Abyssal Ones."
++  "wiki_trait_effect_yoki_power_ex2": "The Organization building and the Handler job hold the meter back. After building a fortress in Hell, you can hunt the five Abyssal Ones.",
++  "sw_title": "Warriors of the Organization",
++  "sw_intro": "Elite warriors with their own stats, perks and moods. Active warriors boost your army and join every hunt. Each one has a personal Awakening meter. Resting lowers it, but a resting warrior gives no bonuses and is still paid.",
++  "sw_level": "Lv",
++  "sw_active": "Active",
++  "sw_resting": "Resting",
++  "sw_potential": "Potential",
++  "sw_loyalty": "Loyalty",
++  "sw_meter": "Awakening",
++  "sw_wage": "Wage",
++  "sw_per_day": "/day",
++  "sw_fee": "Fee",
++  "sw_unpaid_short": "unpaid days:",
++  "sw_rest": "Rest",
++  "sw_activate": "Activate",
++  "sw_rename": "Rename",
++  "sw_rename_prompt": "New name for this warrior:",
++  "sw_retire": "Retire",
++  "sw_retire_confirm": "Retire %0 from service? Warriors who leave unhappy may hold a grudge.",
++  "sw_recruits": "Recruits",
++  "sw_refresh_in": "New recruits in",
++  "sw_days": "days",
++  "sw_refresh": "Find new recruits",
++  "sw_hire": "Hire",
++  "sw_hall": "Hall of the Fallen",
++  "sw_stat_str": "Strength",
++  "sw_stat_spd": "Speed",
++  "sw_stat_ctl": "Control",
++  "sw_stat_sns": "Sense",
++  "sw_stat_wil": "Will",
++  "sw_temper_stoic": "Stoic",
++  "sw_temper_proud": "Proud",
++  "sw_temper_gentle": "Gentle",
++  "sw_temper_volatile": "Volatile",
++  "sw_mood_devoted": "devoted",
++  "sw_mood_content": "content",
++  "sw_mood_uneasy": "uneasy",
++  "sw_mood_resentful": "resentful",
++  "sw_perk_quick_draw": "Quick Draw",
++  "sw_perk_quick_draw_desc": "+10% damage in hunts.",
++  "sw_perk_defensive": "Defensive",
++  "sw_perk_defensive_desc": "25% fewer soldiers lost in hunts (stacks up to 75%).",
++  "sw_perk_loyal": "Loyal",
++  "sw_perk_loyal_desc": "30% lower wage and higher starting loyalty.",
++  "sw_perk_iron_control": "Iron Control",
++  "sw_perk_iron_control_desc": "Her Awakening meter fills 40% slower.",
++  "sw_perk_prodigy": "Prodigy",
++  "sw_perk_prodigy_desc": "Higher chance to improve every stat on level up.",
++  "sw_perk_unyielding": "Unyielding",
++  "sw_perk_unyielding_desc": "+10% chance to defy death.",
++  "sw_perk_veteran": "Veteran",
++  "sw_perk_veteran_desc": "Joins at level 3.",
++  "sw_perk_hot_headed": "Hot-headed",
++  "sw_perk_hot_headed_desc": "Grows stronger faster, but her Awakening meter fills twice as fast.",
++  "sw_perk_haunted": "Haunted",
++  "sw_perk_haunted_desc": "+15 Sense, but adds 1 army stress.",
++  "sw_perk_greedy": "Greedy",
++  "sw_perk_greedy_desc": "40% higher wage, and loses loyalty twice as fast when unpaid.",
++  "sw_perk_frail_mind": "Frail Mind",
++  "sw_perk_frail_mind_desc": "Control rarely improves on level up.",
++  "sw_perk_grudge_bearer": "Grudge-bearer",
++  "sw_perk_grudge_bearer_desc": "Loses loyalty twice as fast.",
++  "sw_fate_fell": "fell in battle",
++  "sw_fate_awakened": "Awakened",
++  "sw_fate_retired": "retired",
++  "sw_fate_deserted": "deserted",
++  "sw_fate_slain_awakened": "slain after Awakening",
++  "sw_fate_slain_rogue": "slain after turning against you",
++  "sw_hired": "%0 has joined the Organization as No. %1.",
++  "sw_levelup": "%0 reached level %1: %2.",
++  "sw_levelup_none": "no stats improved",
++  "sw_unpaid": "%0 was not paid today. Her loyalty is falling.",
++  "sw_retired": "%0 has retired from service.",
++  "sw_deserted": "%0 has deserted the Organization!",
++  "sw_grudge": "%0 has returned, and she remembers how she was treated. She now hunts your soldiers.",
++  "sw_awakened": "%0 has lost control and Awakened! She now hunts your soldiers.",
++  "sw_defied": "%0 should have died, but refused to fall. Her Awakening meter surged.",
++  "sw_fell": "%0 has fallen in battle.",
++  "sw_hunt_target_named": "Target: %0, an Awakened warrior.",
++  "sw_hunt_target_rogue": "Target: %0, a warrior with a grudge.",
++  "sw_hunt_named_win": "%0 has been put to rest. %1 soldiers were killed and %2 were wounded. The bounty paid $%3.",
++  "sw_hunt_rogue_win": "%0 has been defeated. Her grudge dies with her. %1 soldiers were killed and %2 were wounded. The bounty paid $%3.",
++  "sw_army_bd": "Elite Warriors"
+ }
+-- 
+2.43.0
+
