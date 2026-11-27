@@ -41,7 +41,7 @@ export const warriorVars = {
     defyMax: 25,
 };
 
-const fights = {
+export const fights = {
     // [meter gain, xp win, xp loss, death% win, death% loss]
     hunt:     [6, 40, 20, 2, 10],
     abyss:    [10, 50, 50, 4, 4],

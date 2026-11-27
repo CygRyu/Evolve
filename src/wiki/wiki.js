@@ -47,7 +47,8 @@ function initPage(){
                 { key: 'resets' },
                 { key: 'planets' },
                 { key: 'universes' },
-                { key: 'hell' }                
+                { key: 'hell' },
+                { key: 'warriors' } // Expansion
             ]
         },
         {
