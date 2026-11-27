@@ -13,23 +13,21 @@ https://cygryu.github.io/Evolve/
 **Silverblood, a new race**
 Humans infused with demon flesh: elite warriors who are slowly becoming the monsters they hunt. Silverblood is a humanoid race and can be picked on the evolution screen from your very first run.
 
-- **Demon Power:** +25% combat rating, but your soldiers build up the Awakening meter.
+- **Demon Power:** +25% combat rating, but your warriors can Awaken.
 - **Outcast:** your citizens fear the warriors who protect them, so the army causes more stress.
 
-**The Awakening meter**
-- Shown beside Morale. Soldiers fill it slowly, wounded soldiers faster, and every battle adds to it.
-- At 100%, a warrior Awakens into a monster that kills soldiers and adds stress until you hunt it down with **Hunt the Awakened**.
-- **The Organization** (a new building) and **Handlers** (a new job) hold the meter back.
-
 **Warriors of the Organization**
-Recruit up to 8 named elite warriors, one slot per Organization, in the Civics, Military tab. It works like Battle Brothers:
+Your garrison soldiers are human. Your real strength, and your real danger, are up to 8 named elite warriors in the Civics, Military tab. It works like Battle Brothers:
 
 - Every recruit is randomly generated, with five stats (Strength, Speed, Control, Sense, Will), perks and flaws, and a temperament.
 - Hiring costs a fee, and every warrior is paid a wage each day. If you can't pay, loyalty drops, and unhappy warriors may desert.
 - Warriors level up from battles, Fire Emblem style: each stat has its own hidden chance to grow on every level up.
-- Each warrior has her own Awakening meter. Resting her lowers it, but she gives no bonuses while resting and still gets paid.
-- Warriors can die in battle, with a 5% to 25% chance to defy death.
-- A warrior who Awakens, deserts or retires unhappy may come back as a named enemy.
+- **Seats:** you start with one, and commission more as your civilization reaches new milestones.
+- **Awakening:** each warrior has her own meter and a hidden breaking point. She warns you as she nears it, and on the brink she sends you her **Black Card**: honour it, try to save her, or ignore it.
+- Rest, **Handlers**, the **Silent Hall** and **Stillwater Tonic** from the **Apothecary** keep warriors stable. **Full Power** doubles a warrior's bonuses, at a steep cost.
+- Every warrior keeps a **service record** and a chronicle of her notable moments.
+- **Retire** her with severance or **dismiss** her. Veterans who left on good terms may come back. Others may come back for revenge, or Awaken in exile.
+- **Wild Awakened Ones** roam the land and must be hunted with **Hunt the Awakened**.
 
 **Endgame: the Abyssal Ones**
 After building a fortress in Hell, Silverbloods can hunt five ancient Awakened, each stronger than the last. Every kill makes your army stronger for the rest of the run.

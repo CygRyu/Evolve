@@ -18,7 +18,7 @@ import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js'
 import { bioseed } from './resets.js';
 import { loadTab } from './index.js';
 import { modRaceKeys } from './mods.js';
-import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt, yokiHuntAvailable } from './silverblood.js';
+import { yokiHunt, yokiHuntEffect, abyssAvailable, abyssTitle, abyssEffect, abyssHunt, yokiHuntAvailable, organizationEffect, silentHallEffect, apothecaryEffect } from './silverblood.js';
 
 export const actions = {
     evolution: {
@@ -2034,11 +2034,7 @@ export const actions = {
                 Furs(offset){ return costMultiplier('organization', offset, 40, 1.32); }
             },
             effect(args){
-                let desc = `<div>${loc('city_organization_effect',[yokiVars.orgCalm])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div>`;
-                if (args && args.isWiki){ return desc; }
-                let a = yokiState();
-                let r = yokiRates();
-                return desc + `<div class="has-text-caution">${loc('city_organization_effect2',[Math.floor(a.m), (r.net >= 0 ? '+' : '') + r.net.toFixed(2)])}</div>`;
+                return organizationEffect();
             },
             action(args){
                 if (payCosts($(this)[0])){
@@ -2054,6 +2050,66 @@ export const actions = {
                 return {
                     d: { count: 0 },
                     p: ['organization','city']
+                };
+            }
+        },
+        silent_hall: { // Expansion: Silverblood
+            id: 'city-silent_hall',
+            title: loc('city_silent_hall'),
+            desc: loc('city_silent_hall_desc'),
+            category: 'military',
+            reqs: { military: 1, mining: 3 },
+            trait: ['yoki_power'],
+            not_trait: ['cataclysm','lone_survivor'],
+            cost: {
+                Money(offset){ return costMultiplier('silent_hall', offset, 900, 1.35); },
+                Stone(offset){ return costMultiplier('silent_hall', offset, 600, 1.35); },
+                Furs(offset){ return costMultiplier('silent_hall', offset, 120, 1.35); }
+            },
+            effect(args){
+                return silentHallEffect(args && args.isWiki);
+            },
+            action(args){
+                if (payCosts($(this)[0])){
+                    incrementStruct('silent_hall','city');
+                    return true;
+                }
+                return false;
+            },
+            struct(){
+                return {
+                    d: { count: 0 },
+                    p: ['silent_hall','city']
+                };
+            }
+        },
+        apothecary: { // Expansion: Silverblood
+            id: 'city-apothecary',
+            title: loc('city_apothecary'),
+            desc: loc('city_apothecary_desc'),
+            category: 'military',
+            reqs: { military: 1, high_tech: 1, smelting: 2 },
+            trait: ['yoki_power'],
+            not_trait: ['cataclysm','lone_survivor'],
+            cost: {
+                Money(offset){ return costMultiplier('apothecary', offset, 6000, 1.3); },
+                Cement(offset){ return costMultiplier('apothecary', offset, 1500, 1.3); },
+                Furs(offset){ return costMultiplier('apothecary', offset, 800, 1.3); }
+            },
+            effect(args){
+                return apothecaryEffect(args && args.isWiki);
+            },
+            action(args){
+                if (payCosts($(this)[0])){
+                    incrementStruct('apothecary','city');
+                    return true;
+                }
+                return false;
+            },
+            struct(){
+                return {
+                    d: { count: 0 },
+                    p: ['apothecary','city']
                 };
             }
         },

@@ -4,6 +4,21 @@ import { clearElement } from './../functions.js';
 export const changeList = [
     { // Fan expansion (not part of the official game)
         version: `1.4.10`,
+        revision: ` Silverblood Expansion v1.2 (part 1)`,
+        date: `11/27/2026`,
+        changes: [
+            `Awakening rework: garrison soldiers no longer fill a global meter. Only named warriors can Awaken, each at her own hidden breaking point, with warnings as she nears it.`,
+            `Rest can no longer fully calm a veteran warrior: her floor rises with level and with every death she defied.`,
+            `New: Full Power, the Black Card, per-warrior Handlers, the Silent Hall and the Apothecary (Stillwater Tonic).`,
+            `Wild Awakened Ones now roam the land, more often in later eras, on Monster-infested planets, and as your warriors grow famous.`,
+            `Warrior Seats: commission up to 8 Seats as your civilization reaches milestones. They no longer depend on the number of Organizations.`,
+            `Service records and chronicles for every warrior, kept in the Hall of the Fallen.`,
+            `Retire with severance or dismiss. Veterans may return, seek revenge, or Awaken in exile.`,
+            `Unbroken now asks for your first space mission with at least 3 warriors and none ever Awakened.`
+        ]
+    },
+    { // Fan expansion (not part of the official game)
+        version: `1.4.10`,
         revision: ` Silverblood Expansion v1.1`,
         date: `11/27/2026`,
         changes: [

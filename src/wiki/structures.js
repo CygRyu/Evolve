@@ -42,6 +42,8 @@ const extraInformation = {
     planetary: {
         slaughter: [loc(`wiki_structure_planetary_slaughter`)],
         organization: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_organization`)],
+        silent_hall: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_silent_hall`)],
+        apothecary: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_apothecary`)],
         hunt_awakened: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_hunt_awakened`)],
         abyss_hunt: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_abyss_hunt`), loc(`wiki_structure_planetary_abyss_hunt_list`)],
     },

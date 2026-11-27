@@ -1,16 +1,19 @@
 // Expansion: Silverblood warriors.
 //
 // Recruitable named warriors with random stats, Fire Emblem-style growth
-// rates, perks, temperament and loyalty. Each has her own Awakening meter.
-// Warriors can be rested, retired, killed (with a chance to defy death),
-// Awaken into named bosses, or turn on you out of a grudge.
+// rates, perks, temperament and loyalty. Only these warriors can Awaken:
+// each has a personal meter and a hidden breaking point. Warriors can be
+// rested, pushed to Full Power, handed a Black Card, retired, dismissed,
+// killed (with a chance to defy death), Awaken into named bosses, or come
+// back later as veterans or as enemies.
 //
 // State: global.race.warriors (per run), global.stats.silver_hall (across runs).
 
 import { global, sizeApproximation } from './vars.js';
 import { loc } from './locale.js';
 import { vBind, messageQueue, clearElement } from './functions.js';
-import { yokiActive, yokiState } from './silverblood.js';
+import { yokiActive, yokiState, hallsFunded, abyssVars } from './silverblood.js';
+import { traits } from './races.js';
 
 // ---------------------------------------------------------------------------
 // Tuning
@@ -32,13 +35,97 @@ export const warriorVars = {
     growMax: 5,
     restCooldown: 120,        // seconds between rest/activate switches
     restDecay: 3,             // personal meter lost per day while resting
-    activeGain: 0.2,          // personal meter gained per day while active
+    activeGain: 0.12,         // personal meter gained per day while active
     armyDivisor: 800,         // army bonus = total might / this
     senseDivisor: 500,        // hunt damage bonus = total sense / this
     willDivisor: 1000,        // army stress reduction = total will / this (max 50%)
     speedCdCut: 1000,         // abyss cooldown cut = total speed / this (max 50%)
     defyBase: 5,
     defyMax: 25,
+    defyMeter: 20,            // meter added when she defies death
+
+    // Breaking point (hidden): average of two rolls in this range
+    breakMin: 70,
+    breakMax: 130,
+    warn: [0.6, 0.8, 0.92],   // flicker, strained, on the brink (share of her breaking point)
+
+    // Rising floor (share of her breaking point that rest can't go below)
+    floorLevel: 0.015,        // per level above 1
+    floorDefy: 0.06,          // per death defied
+    floorCap: 0.6,
+    floorHallCut: 0.04,       // each funded Silent Hall lowers the cap
+    floorCapMin: 0.4,
+
+    // Full Power
+    fullBonus: 2,             // her bonuses x2
+    fullMeter: 3,             // her meter gain x3
+
+    // Calming
+    handlerCut: 0.4,          // assigned Handler: -40% meter gain for her
+    orgCalm: 0.02,            // each Organization: -2% meter gain for all
+    orgCalmMax: 0.2,
+    hallRest: 0.3,            // each funded Silent Hall: +30% rest recovery
+    hallRestMax: 1.5,
+
+    // Stillwater Tonic
+    tonicDays: 60,            // days per tonic, per Apothecary
+    tonicBase: 2,             // storage: base + 1 per Apothecary
+    tonicCut: 40,             // meter removed (ignores the floor)
+    tonicFail: 15,            // % chance a Black Card tonic fails (+5 meter)
+    restSaveRisk: 12,         // % chance resting her at the brink is too late
+
+    // Black Card
+    cardLoyalty: 4,           // sisters' loyalty change on honour (+) or ignore (-)
+
+    // Leaving
+    sevBase: 10,              // severance = wage x (base + days served / div)
+    sevDiv: 10,
+    dismissBase: 2,           // sisters lose base + days served / div loyalty (max)
+    dismissDiv: 25,
+    dismissMax: 10,
+    vetMin: 30,               // days away before a veteran can return
+    vetChance: 30,            // % per pool refresh (one veteran at most)
+    vetMax: 12,
+    exileRiseAt: 0.75,        // leaving above this share of her limit: meter may keep rising
+    exileRise: 0.15,          // per day
+    exileFall: 1,             // per day
+    exileCalm: 1,             // % per day that a restless veteran settles down
+
+    chronMax: 10,
+    hallChron: 5,
+};
+
+// Seats: [milestone check, cost]. Seat 1 is free with the first Organization.
+export const seatList = [
+    { req: 'org',      cost: {} },
+    { req: 'iron',     cost: { Money: 2000, Iron: 500 } },
+    { req: 'hall',     cost: { Money: 5000, Iron: 1500, Furs: 1000 } },
+    { req: 'boot',     cost: { Money: 12000, Cement: 3000 } },
+    { req: 'apoth',    cost: { Money: 25000, Cement: 6000, Steel: 1500 } },
+    { req: 'electric', cost: { Money: 45000, Steel: 4000, Copper: 4000 } },
+    { req: 'industry', cost: { Money: 80000, Steel: 10000 } },
+    { req: 'space',    cost: { Money: 300000, Steel: 40000, Titanium: 12000 } },
+];
+
+const seatReq = {
+    org(){ return orgCount() >= 1; },
+    iron(){ return (global.tech['mining'] || 0) >= 3; },
+    hall(){ return global.city['silent_hall'] && global.city.silent_hall.count >= 1; },
+    boot(){ return (global.tech['boot_camp'] || 0) >= 1; },
+    apoth(){ return global.city['apothecary'] && global.city.apothecary.count >= 1; },
+    electric(){ return (global.tech['high_tech'] || 0) >= 2; },
+    industry(){ return (global.tech['high_tech'] || 0) >= 3; },
+    space(){ return (global.tech['space'] || 0) >= 2; },
+};
+
+// Wild Awakened Ones: average days between sightings, by era (high_tech level).
+export const wildVars = {
+    era: [[0, 360], [2, 240], [5, 160], [8, 120]],
+    infested: 1.5,           // more often on Monster-infested planets
+    fameLevels: 60,          // total roster levels for the full fame bonus
+    fameMax: 1,              // up to 2x as often
+    max: 3,                  // most wild Awakened at large at once
+    strMin: 30, strMax: 60, strMult: 1.25,
 };
 
 export const fights = {
@@ -79,17 +166,72 @@ const names = [
     'Agna','Branwen','Cerys','Dagny','Elske','Fenna','Greta','Hedda','Inga','Jessamy'
 ];
 
+const wildFirst = ['Gor','Vesh','Mal','Thra','Ur','Skel','Nyx','Brak','Oss','Zul','Kra','Hesk','Drav','Yth','Gash','Quor'];
+const wildSecond = ['oth','ra','gul','ven','mire','ax','esh','ul','orn','ith','ak','ys','umbra','eth'];
+const wildEpithets = 12;  // sw_epithet_0 .. 11
+
+const battleKinds = Object.keys(fights);
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 export function warriorState(){
     if (!global.race['warriors']){
-        global.race['warriors'] = { roster: [], pool: [], refresh: 0, nextId: 1, lastDay: global.stats.days || 0, named: [], grudges: [], msg: '' };
+        global.race['warriors'] = { roster: [], pool: [], refresh: 0, nextId: 1, lastDay: global.stats.days || 0, named: [], grudges: [] };
     }
     let w = global.race.warriors;
-    ['roster','pool','named','grudges'].forEach(k => { if (!Array.isArray(w[k])){ w[k] = []; } });
+    ['roster','pool','named','grudges','vets'].forEach(k => { if (!Array.isArray(w[k])){ w[k] = []; } });
+    if (w.seats === undefined){
+        // Older saves: keep every warrior already hired.
+        w.seats = Math.min(warriorVars.maxSlots, Math.max(w.roster.length, orgCount() >= 1 ? 1 : 0));
+    }
+    if (w.tonic === undefined){ w.tonic = 0; }
+    if (w.woke === undefined){ w.woke = 0; }
+    if (w.wildSlain === undefined){ w.wildSlain = 0; }
+    if (w.msg !== undefined){ delete w.msg; }
+    w.roster.forEach(wr => {
+        fixWarrior(wr);
+        if (wr.rec.j === null){ wr.rec.j = today(); wr.rec.st = 1; }
+    });
+    w.pool.forEach(fixWarrior);
+    w.vets.forEach(fixWarrior);
     return w;
+}
+
+// Adds fields from newer versions to an existing warrior.
+function fixWarrior(wr){
+    if (wr.bp === undefined){ wr.bp = rollBreak(); }
+    if (wr.fp === undefined){ wr.fp = false; }
+    if (wr.hd === undefined){ wr.hd = false; }
+    if (wr.card === undefined){ wr.card = false; }
+    if (wr.ws === undefined){ wr.ws = 0; }
+    if (wr.defied === undefined){ wr.defied = 0; }
+    if (!Array.isArray(wr.chron)){ wr.chron = []; }
+    if (!wr.rec){ wr.rec = newRecord(wr); }
+    battleKinds.forEach(k => { if (!wr.rec.b[k]){ wr.rec.b[k] = [0, 0]; } });
+}
+
+function newRecord(wr){
+    let b = {};
+    battleKinds.forEach(k => { b[k] = [0, 0]; });
+    return {
+        j: null,             // day she first joined (null while a recruit)
+        st: 0,               // stints served
+        sd: 0,               // days served
+        r0: rankOf(wr),      // rank when recruited
+        rb: rankOf(wr),      // best rank reached
+        fee: 0, wg: 0,       // fees paid, total wages
+        rd: 0, rn: 0,        // days rested, number of rests
+        ud: 0,               // days unpaid
+        b,                   // battles: kind -> [won, lost]
+        aw: 0, ns: 0, fs: 0, // Awakened slain, named enemies slain, former sisters slain
+        ad: 0, ak: 0,        // Abyssal damage, Abyssal killing blows
+        cl: 0, dd: 0,        // comrades lost, deaths defied
+        pm: Math.floor(wr.meter || 0),
+        ll: Math.round(wr.loyalty || 0),
+        s0: Object.assign({}, wr.stats),
+    };
 }
 
 function hall(){
@@ -99,14 +241,33 @@ function hall(){
 
 function addHall(wr, fate){
     let h = hall();
-    h.unshift({ n: wr.name, r: rankOf(wr), l: wr.lvl, f: fate, d: global.stats.days || 0 });
+    let entry = { n: wr.name, r: rankOf(wr), l: wr.lvl, f: fate, d: global.stats.days || 0 };
+    if (wr.rec){
+        entry.t = wr.temper;
+        entry.rec = JSON.parse(JSON.stringify(wr.rec));
+        entry.ch = (wr.chron || []).slice(-warriorVars.hallChron);
+        entry.s = Object.assign({}, wr.stats);
+    }
+    h.unshift(entry);
     if (h.length > 50){ h.length = 50; }
 }
 
-export function slots(){
-    let orgs = global.city['organization'] ? global.city.organization.count : 0;
-    return Math.min(warriorVars.maxSlots, orgs);
+function chron(wr, key, args){
+    wr.chron.push({ d: global.stats.days || 0, k: key, a: args || [] });
+    if (wr.chron.length > warriorVars.chronMax){ wr.chron.splice(0, wr.chron.length - warriorVars.chronMax); }
 }
+
+function orgCount(){
+    return global.city && global.city['organization'] ? global.city.organization.count : 0;
+}
+
+export function seats(){
+    if (!global.race['warriors']){ return 0; }
+    return global.race.warriors.seats || 0;
+}
+
+// Kept for older callers.
+export function slots(){ return seats(); }
 
 export function active(){
     if (!yokiActive() || !global.race['warriors']){ return []; }
@@ -116,6 +277,7 @@ export function active(){
 function rand(min, max){ return Math.rand(min, max + 1); } // inclusive
 function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 function pick(list){ return list[Math.rand(0, list.length)]; }
+function today(){ return global.stats.days || 0; }
 
 // ---------------------------------------------------------------------------
 // Generation
@@ -138,6 +300,10 @@ export function potential(wr){
 function rollStat(){
     // Average of two rolls: most warriors are middling, standouts are rare.
     return Math.round((rand(10, 90) + rand(10, 90)) / 2);
+}
+
+function rollBreak(){
+    return Math.round((rand(warriorVars.breakMin, warriorVars.breakMax) + rand(warriorVars.breakMin, warriorVars.breakMax)) / 2);
 }
 
 function rollPerks(){
@@ -172,7 +338,7 @@ export function makeWarrior(){
     if (perks.includes('frail_mind')){ growth.ctl = Math.max(5, growth.ctl - 20); }
     if (perks.includes('haunted')){ stats.sns = Math.min(100, stats.sns + 15); }
     let temper = pick(Object.keys(temperaments));
-    let used = w.roster.concat(w.pool).map(x => x.name);
+    let used = w.roster.concat(w.pool, w.vets).map(x => x.name);
     let free = names.filter(n => !used.includes(n));
     let wr = {
         id: w.nextId++,
@@ -190,6 +356,7 @@ export function makeWarrior(){
     if (perks.includes('veteran')){
         for (let i = 0; i < 2; i++){ levelUp(wr, true); }
     }
+    fixWarrior(wr);
     wr.fee = feeFor(wr.stats);
     wr.wage = baseWage(wr);
     return wr;
@@ -211,6 +378,16 @@ export function refreshPool(paid){
     }
     w.pool.splice(0, w.pool.length);
     for (let i = 0; i < warriorVars.poolSize; i++){ w.pool.push(makeWarrior()); }
+
+    // A former warrior may ask to come back.
+    let ready = w.vets.filter(v => v.mood !== 'bitter' && today() - v.left >= warriorVars.vetMin);
+    if (ready.length && Math.rand(0, 100) < warriorVars.vetChance){
+        let v = pick(ready);
+        let offer = JSON.parse(JSON.stringify(v));
+        offer.returning = true;
+        offer.fee = Math.round(feeFor(offer.stats) * (v.mood === 'grateful' ? 0.5 : 1));
+        w.pool[w.pool.length - 1] = offer;
+    }
     w.refresh = warriorVars.poolRefreshDays;
     return true;
 }
@@ -237,6 +414,10 @@ function levelUp(wr, silent){
         }
     });
     wr.wage = baseWage(wr);
+    if (wr.rec){
+        wr.rec.rb = Math.min(wr.rec.rb, rankOf(wr));
+        if (!silent && wr.lvl % 5 === 0){ chron(wr, 'sw_ch_level', [wr.lvl, rankOf(wr)]); }
+    }
     if (!silent){
         messageQueue(loc('sw_levelup',[wr.name, wr.lvl, gains.length ? gains.join(', ') : loc('sw_levelup_none')]),'success',false,['combat']);
     }
@@ -253,54 +434,355 @@ function gainXp(wr, xp){
 }
 
 // ---------------------------------------------------------------------------
+// Awakening: breaking point, floor, warnings
+// ---------------------------------------------------------------------------
+
+export function floorCap(){
+    return Math.max(warriorVars.floorCapMin, warriorVars.floorCap - hallsFunded() * warriorVars.floorHallCut);
+}
+
+export function floorOf(wr){
+    let share = warriorVars.floorLevel * (wr.lvl - 1) + warriorVars.floorDefy * (wr.defied || 0);
+    return wr.bp * Math.min(floorCap(), share);
+}
+
+// 0 calm, 1 eyes flicker gold, 2 strained, 3 on the brink
+export function stageOf(wr){
+    let r = wr.meter / wr.bp;
+    let s = 0;
+    warriorVars.warn.forEach((v, i) => { if (r >= v){ s = i + 1; } });
+    return s;
+}
+
+export function meterMult(wr){
+    let m = 1.5 - wr.stats.ctl / 100;
+    if (wr.perks.includes('hot_headed')){ m *= 2; }
+    if (wr.perks.includes('iron_control')){ m *= 0.6; }
+    if (global.race['yoki_power']){ m *= traits.yoki_power.vars()[1] / 100; }
+    m *= Math.max(0, 1 - yokiState().abyss.slain * abyssVars.calmReward);
+    if (wr.hd){ m *= 1 - warriorVars.handlerCut; }
+    m *= 1 - Math.min(warriorVars.orgCalmMax, orgCount() * warriorVars.orgCalm);
+    if (wr.fp){ m *= warriorVars.fullMeter; }
+    return Math.max(0.05, m);
+}
+
+function restRate(){
+    return warriorVars.restDecay * (1 + Math.min(warriorVars.hallRestMax, hallsFunded() * warriorVars.hallRest));
+}
+
+// Call after any change to her meter. Returns true if she Awakened.
+function checkMeter(wr){
+    if (wr.rec){ wr.rec.pm = Math.max(wr.rec.pm, Math.floor(wr.meter)); }
+    if (wr.meter >= wr.bp){
+        awaken(wr);
+        return true;
+    }
+    let s = stageOf(wr);
+    if (s > wr.ws){
+        wr.ws = s;
+        if (s === 1){ messageQueue(loc('sw_warn_1',[wr.name]),'caution',false,['combat']); }
+        else if (s === 2){
+            messageQueue(loc('sw_warn_2',[wr.name]),'warning',false,['combat']);
+            chron(wr, 'sw_ch_strained');
+        }
+        else if (s === 3){
+            wr.card = true;
+            messageQueue(loc('sw_card_msg',[wr.name]),'danger',false,['combat']);
+            chron(wr, 'sw_ch_card');
+        }
+    }
+    else if (s < wr.ws){
+        wr.ws = s;
+        if (s < 3){ wr.card = false; }
+    }
+    return false;
+}
+
+function findWarrior(id){
+    return warriorState().roster.find(x => x.id === id);
+}
+
+function removeFromRoster(wr){
+    let w = warriorState();
+    let i = w.roster.findIndex(x => x.id === wr.id);
+    if (i >= 0){ w.roster.splice(i, 1); }
+}
+
+// ---------------------------------------------------------------------------
 // Player actions
 // ---------------------------------------------------------------------------
 
 export function hire(id){
     let w = warriorState();
     let idx = w.pool.findIndex(x => x.id === id);
-    if (idx < 0 || w.roster.length >= slots()){ return false; }
-    let wr = w.pool[idx];
-    if (global.resource.Money.amount < wr.fee){ return false; }
-    global.resource.Money.amount -= wr.fee;
+    if (idx < 0 || w.roster.length >= seats()){ return false; }
+    let offer = w.pool[idx];
+    if (global.resource.Money.amount < offer.fee){ return false; }
+    let wr = offer;
+    if (offer.returning){
+        let vi = w.vets.findIndex(v => v.id === offer.id);
+        if (vi < 0){ w.pool.splice(idx, 1); return false; }
+        wr = w.vets.splice(vi, 1)[0];
+        let away = today() - wr.left;
+        if (wr.mood === 'grateful'){ wr.loyalty = clamp(wr.loyalty + 10, 0, 100); }
+        wr.loyalty = Math.max(wr.loyalty, temperaments[wr.temper].start - 10);
+        ['left','mood','how','rise','returning'].forEach(k => delete wr[k]);
+        wr.fee = offer.fee;
+        wr.status = 'active'; wr.cd = 0; wr.unpaid = 0;
+        wr.fp = false; wr.hd = false; wr.card = false;
+        wr.ws = 0;
+        chron(wr, 'sw_ch_return', [away]);
+        messageQueue(loc('sw_returned',[wr.name, rankOf(wr)]),'success',false,['combat']);
+    }
+    else {
+        wr.rec.r0 = rankOf(wr);
+        wr.rec.rb = wr.rec.r0;
+        wr.rec.s0 = Object.assign({}, wr.stats);
+        messageQueue(loc('sw_hired',[wr.name, rankOf(wr)]),'success',false,['combat']);
+    }
+    global.resource.Money.amount -= offer.fee;
     w.pool.splice(idx, 1);
+    if (wr.rec.j === null){ wr.rec.j = today(); }
+    wr.rec.st++;
+    wr.rec.fee += offer.fee;
+    wr.wage = baseWage(wr);
+    if (!offer.returning){ chron(wr, 'sw_ch_joined', [rankOf(wr)]); }
     w.roster.push(wr);
-    messageQueue(loc('sw_hired',[wr.name, rankOf(wr)]),'success',false,['combat']);
     return true;
 }
 
 export function toggleRest(id){
-    let wr = warriorState().roster.find(x => x.id === id);
+    let wr = findWarrior(id);
     if (!wr || wr.cd > 0){ return false; }
     wr.status = wr.status === 'active' ? 'resting' : 'active';
+    if (wr.status === 'resting'){
+        wr.fp = false;
+        wr.rec.rn++;
+    }
     wr.cd = warriorVars.restCooldown;
     return true;
 }
 
+export function toggleFull(id){
+    let wr = findWarrior(id);
+    if (!wr || wr.status !== 'active'){ return false; }
+    wr.fp = !wr.fp;
+    if (wr.fp){ messageQueue(loc('sw_full_on',[wr.name]),'caution',false,['combat']); }
+    return true;
+}
+
+export function handlerCount(){
+    return global.civic['handler'] ? global.civic.handler.workers : 0;
+}
+
+export function handlersUsed(){
+    return global.race['warriors'] ? global.race.warriors.roster.filter(x => x.hd).length : 0;
+}
+
+export function toggleHandler(id){
+    let wr = findWarrior(id);
+    if (!wr){ return false; }
+    if (wr.hd){ wr.hd = false; return true; }
+    if (handlersUsed() >= handlerCount()){ return false; }
+    wr.hd = true;
+    return true;
+}
+
+export function tonicCap(){
+    let ap = global.city['apothecary'] ? global.city.apothecary.count : 0;
+    return ap > 0 ? warriorVars.tonicBase + ap : 0;
+}
+
+export function useTonic(id){
+    let w = warriorState();
+    let wr = findWarrior(id);
+    if (!wr || w.tonic < 1){ return false; }
+    w.tonic--;
+    wr.meter = Math.max(0, wr.meter - warriorVars.tonicCut);
+    chron(wr, 'sw_ch_tonic');
+    messageQueue(loc('sw_tonic_used',[wr.name]),'info',false,['combat']);
+    checkMeter(wr);
+    return true;
+}
+
+// Black Card choices: honour | tonic | rest | ignore
+export function blackCard(id, choice){
+    let wr = findWarrior(id);
+    if (!wr || !wr.card){ return false; }
+    let w = warriorState();
+    switch (choice){
+        case 'honour':
+            removeFromRoster(wr);
+            chron(wr, 'sw_ch_honoured');
+            addHall(wr, 'honoured');
+            w.roster.forEach(o => changeLoyalty(o, warriorVars.cardLoyalty));
+            messageQueue(loc('sw_card_honoured',[wr.name]),'special',false,['combat']);
+            return true;
+        case 'tonic':
+            if (w.tonic < 1){ return false; }
+            w.tonic--;
+            wr.fp = false;
+            if (Math.rand(0, 100) < warriorVars.tonicFail){
+                wr.meter += 5;
+                messageQueue(loc('sw_card_tonic_fail',[wr.name]),'danger',false,['combat']);
+                checkMeter(wr);
+                return true;
+            }
+            wr.card = false;
+            wr.meter = Math.max(0, wr.meter - warriorVars.tonicCut);
+            chron(wr, 'sw_ch_saved');
+            messageQueue(loc('sw_card_saved',[wr.name]),'success',false,['combat']);
+            checkMeter(wr);
+            return true;
+        case 'rest':
+            wr.card = false;
+            if (Math.rand(0, 100) < warriorVars.restSaveRisk){
+                messageQueue(loc('sw_card_too_late',[wr.name]),'danger',false,['combat']);
+                awaken(wr);
+                return true;
+            }
+            if (wr.status === 'active'){ wr.rec.rn++; }
+            wr.status = 'resting';
+            wr.fp = false;
+            wr.cd = warriorVars.restCooldown;
+            chron(wr, 'sw_ch_saved');
+            messageQueue(loc('sw_card_rest',[wr.name]),'warning',false,['combat']);
+            return true;
+        case 'ignore':
+            wr.card = false;
+            chron(wr, 'sw_ch_ignored');
+            w.roster.forEach(o => { if (o.id !== wr.id){ changeLoyalty(o, -warriorVars.cardLoyalty); } });
+            messageQueue(loc('sw_card_ignored',[wr.name]),'warning',false,['combat']);
+            return true;
+    }
+    return false;
+}
+
 export function rename(id, name){
-    let wr = warriorState().roster.find(x => x.id === id);
+    let wr = findWarrior(id);
     if (!wr || typeof name !== 'string'){ return; }
     let clean = name.replace(/[<>]/g, '').trim().slice(0, 24);
     if (clean.length){ wr.name = clean; }
 }
 
-export function retire(id){
+// ---------------------------------------------------------------------------
+// Seats
+// ---------------------------------------------------------------------------
+
+export function nextSeat(){
+    let n = seats();
+    if (n >= seatList.length){ return null; }
+    let s = seatList[n];
+    return { n: n + 1, req: s.req, cost: s.cost, ready: seatReq[s.req]() };
+}
+
+function canPay(cost){
+    return Object.keys(cost).every(r => global.resource[r] && global.resource[r].amount >= cost[r]);
+}
+
+export function commissionSeat(){
     let w = warriorState();
-    let idx = w.roster.findIndex(x => x.id === id);
-    if (idx < 0){ return; }
-    let wr = w.roster[idx];
-    w.roster.splice(idx, 1);
-    addHall(wr, 'retired');
-    // A warrior who leaves unhappy may come back for revenge.
-    let chance = Math.max(0, 40 - wr.loyalty) * 2.5 * temperaments[wr.temper].rogue;
-    if (Math.rand(0, 100) < chance){
-        w.grudges.push({ name: wr.name, str: bossStrength(wr, 1.2), due: (global.stats.days || 0) + rand(60, 200) });
-    }
-    messageQueue(loc('sw_retired',[wr.name]),'info',false,['combat']);
+    let s = nextSeat();
+    if (!s || !s.ready || !canPay(s.cost)){ return false; }
+    Object.keys(s.cost).forEach(r => { global.resource[r].amount -= s.cost[r]; });
+    w.seats++;
+    messageQueue(loc('sw_seat_done',[w.seats]),'success',false,['combat']);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
-// Bosses made from your own warriors
+// Leaving: retire, dismiss, veterans
+// ---------------------------------------------------------------------------
+
+export function severance(wr){
+    return Math.round(wr.wage * (warriorVars.sevBase + wr.rec.sd / warriorVars.sevDiv));
+}
+
+export function backPay(wr){
+    return wr.unpaid * wr.wage;
+}
+
+export function retireCost(wr){
+    return severance(wr) + backPay(wr);
+}
+
+export function partingMood(wr, how){
+    let score = wr.loyalty + Math.min(20, wr.rec.sd / 10) - Math.min(15, wr.rec.ud) - Math.min(15, 3 * wr.rec.cl);
+    score += how === 'retired' ? 10 : -20 - 5 * wr.unpaid;
+    return score >= 60 ? 'grateful' : score >= 35 ? 'neutral' : 'bitter';
+}
+
+function dismissHit(wr){
+    return Math.min(warriorVars.dismissMax, warriorVars.dismissBase + wr.rec.sd / warriorVars.dismissDiv);
+}
+
+function leave(wr, how){
+    let w = warriorState();
+    let mood = partingMood(wr, how);
+    removeFromRoster(wr);
+    chron(wr, how === 'retired' ? 'sw_ch_retired' : 'sw_ch_dismissed', [loc(`sw_mood_${mood}`)]);
+    addHall(wr, how);
+    wr.left = today();
+    wr.mood = mood;
+    wr.how = how;
+    wr.rise = wr.meter >= wr.bp * warriorVars.exileRiseAt;
+    wr.status = 'resting'; wr.fp = false; wr.hd = false; wr.card = false; wr.unpaid = 0;
+    w.vets.unshift(wr);
+    if (w.vets.length > warriorVars.vetMax){ w.vets.length = warriorVars.vetMax; }
+    if (mood === 'bitter'){
+        let chance = 50 * temperaments[wr.temper].rogue;
+        if (Math.rand(0, 100) < chance){
+            w.grudges.push({ id: wr.id, name: wr.name, str: bossStrength(wr, 1.2), due: today() + rand(60, 200), former: formerOf(wr) });
+        }
+    }
+    messageQueue(loc(how === 'retired' ? 'sw_retired' : 'sw_dismissed',[wr.name, loc(`sw_mood_${mood}`)]),'info',false,['combat']);
+}
+
+export function retire(id){
+    let wr = findWarrior(id);
+    if (!wr){ return false; }
+    let cost = retireCost(wr);
+    if (global.resource.Money.amount < cost){ return false; }
+    global.resource.Money.amount -= cost;
+    wr.rec.wg += cost;
+    leave(wr, 'retired');
+    return true;
+}
+
+export function dismiss(id){
+    let wr = findWarrior(id);
+    if (!wr){ return false; }
+    let hit = dismissHit(wr);
+    leave(wr, 'dismissed');
+    warriorState().roster.forEach(o => changeLoyalty(o, -hit));
+    return true;
+}
+
+function exileTick(w){
+    for (let i = w.vets.length - 1; i >= 0; i--){
+        let v = w.vets[i];
+        if (v.rise){
+            v.meter += warriorVars.exileRise * Math.max(0.3, 1.5 - v.stats.ctl / 100);
+            if (Math.rand(0, 100) < warriorVars.exileCalm){ v.rise = false; }
+        }
+        else {
+            v.meter = Math.max(0, v.meter - warriorVars.exileFall);
+        }
+        if (v.meter >= v.bp){
+            w.vets.splice(i, 1);
+            let away = today() - v.left;
+            w.woke++;
+            chron(v, 'sw_ch_exile_awakened', [away]);
+            addHall(v, 'awakened_exile');
+            w.named.push({ id: v.id, name: v.name, str: bossStrength(v, 1), kind: 'awakened', former: formerOf(v) });
+            w.grudges = w.grudges.filter(g => g.id !== v.id);
+            messageQueue(loc('sw_exile_awakened',[v.name, away]),'danger',false,['combat']);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bosses made from your own warriors, and wild Awakened Ones
 // ---------------------------------------------------------------------------
 
 function techFactor(){
@@ -311,9 +793,8 @@ function bossStrength(wr, mult){
     return Math.round((might(wr) * 2 + wr.lvl * 10) * mult * techFactor());
 }
 
-function turnBoss(wr, kind, mult){
-    let w = warriorState();
-    w.named.push({ name: wr.name, str: bossStrength(wr, mult), kind });
+function formerOf(wr){
+    return { r: rankOf(wr), sd: wr.rec ? wr.rec.sd : 0 };
 }
 
 export function namedBoss(){
@@ -324,8 +805,45 @@ export function namedBoss(){
 export function namedDefeated(){
     let w = warriorState();
     let b = w.named.shift();
-    if (b){ addHall({ name: b.name, lvl: 0, stats: { str: 0, spd: 0, ctl: 0, sns: 0, wil: 0 } }, b.kind === 'rogue' ? 'slain_rogue' : 'slain_awakened'); }
+    if (b && b.kind === 'wild'){ w.wildSlain++; }
+    else if (b){ addHall({ name: b.name, lvl: 0, stats: { str: 0, spd: 0, ctl: 0, sns: 0, wil: 0 } }, b.kind === 'rogue' ? 'slain_rogue' : 'slain_awakened'); }
     return b;
+}
+
+export function wildCount(){
+    let w = global.race['warriors'];
+    return w ? w.named.filter(b => b.kind === 'wild').length : 0;
+}
+
+function wildName(){
+    return `${pick(wildFirst)}${pick(wildSecond)}, ${loc(`sw_epithet_${Math.rand(0, wildEpithets)}`)}`;
+}
+
+export function wildInterval(){
+    let tech = global.tech['high_tech'] || 0;
+    let days = wildVars.era[0][1];
+    wildVars.era.forEach(e => { if (tech >= e[0]){ days = e[1]; } });
+    let mult = 1;
+    if (global.city.ptrait && global.city.ptrait.includes('infested')){ mult *= wildVars.infested; }
+    let fame = global.race['warriors'] ? global.race.warriors.roster.reduce((t, x) => t + x.lvl, 0) : 0;
+    mult *= 1 + Math.min(wildVars.fameMax, fame / wildVars.fameLevels * wildVars.fameMax);
+    return days / mult;
+}
+
+export function spawnWild(){
+    let w = warriorState();
+    let str = Math.round(rand(wildVars.strMin, wildVars.strMax) * techFactor() * wildVars.strMult);
+    let b = { name: wildName(), str, kind: 'wild' };
+    w.named.push(b);
+    messageQueue(loc('sw_wild_spawn',[b.name]),'danger',false,['combat']);
+    return b;
+}
+
+function wildTick(w){
+    if (orgCount() < 1 || !global.tech['military'] || wildCount() >= wildVars.max){ return; }
+    if (Math.rand(0, 10000) < 10000 / wildInterval()){
+        spawnWild();
+    }
 }
 
 function moraleHit(amount, except){
@@ -346,15 +864,27 @@ function changeLoyalty(wr, delta){
         delta *= t.gain;
     }
     wr.loyalty = clamp(wr.loyalty + delta, 0, 100);
+    if (wr.rec){ wr.rec.ll = Math.min(wr.rec.ll, Math.round(wr.loyalty)); }
+}
+
+function comradeLost(wr){
+    warriorState().roster.forEach(o => {
+        if (o.id !== wr.id){
+            o.rec.cl++;
+            chron(o, 'sw_ch_comrade', [wr.name]);
+        }
+    });
 }
 
 function awaken(wr){
     let w = warriorState();
-    w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
-    turnBoss(wr, 'awakened', 1);
+    removeFromRoster(wr);
+    w.woke++;
+    chron(wr, 'sw_ch_awakened');
+    w.named.push({ id: wr.id, name: wr.name, str: bossStrength(wr, 1), kind: 'awakened', former: formerOf(wr) });
     addHall(wr, 'awakened');
-    yokiState().woke++;
-    moraleHit(3, wr.id);
+    comradeLost(wr);
+    moraleHit(3 + (wr.card ? warriorVars.cardLoyalty : 0), wr.id);
     messageQueue(loc('sw_awakened',[wr.name]),'danger',false,['combat']);
 }
 
@@ -367,67 +897,88 @@ export function warriorsTick(){
     if (!yokiActive()){ return; }
     let w = warriorState();
     w.roster.forEach(wr => { if (wr.cd > 0){ wr.cd--; } });
-    if (slots() > 0 && w.pool.length === 0 && w.refresh <= 0){
+    if (w.seats === 0 && orgCount() >= 1){
+        w.seats = 1;
+        messageQueue(loc('sw_seat_done',[1]),'success',false,['combat']);
+    }
+    // Handlers who lost their jobs leave their warriors.
+    let over = handlersUsed() - handlerCount();
+    for (let i = w.roster.length - 1; i >= 0 && over > 0; i--){
+        if (w.roster[i].hd){ w.roster[i].hd = false; over--; }
+    }
+    if (seats() > 0 && w.pool.length === 0 && w.refresh <= 0){
         refreshPool(false);
     }
-    let today = global.stats.days || 0;
-    if (today !== w.lastDay){
-        let n = Math.max(0, Math.min(10, today - w.lastDay));
-        w.lastDay = today;
+    let now = today();
+    if (now !== w.lastDay){
+        let n = Math.max(0, Math.min(10, now - w.lastDay));
+        w.lastDay = now;
         for (let i = 0; i < n; i++){ dailyTick(w); }
     }
 }
 
-function meterMult(wr){
-    let m = 1.5 - wr.stats.ctl / 100;
-    if (wr.perks.includes('hot_headed')){ m *= 2; }
-    if (wr.perks.includes('iron_control')){ m *= 0.6; }
-    return Math.max(0.1, m);
-}
-
 function dailyTick(w){
     if (w.refresh > 0){ w.refresh--; }
-    if (w.refresh <= 0 && slots() > 0){ refreshPool(false); }
+    if (w.refresh <= 0 && seats() > 0){ refreshPool(false); }
+
+    // Stillwater Tonic
+    let cap = tonicCap();
+    if (cap > 0 && w.tonic < cap){
+        w.tonic = Math.min(cap, w.tonic + global.city.apothecary.count / warriorVars.tonicDays);
+    }
 
     // Wages, loyalty, meters
     w.roster.slice().forEach(wr => {
+        wr.rec.sd++;
         if (global.resource.Money.amount >= wr.wage){
             global.resource.Money.amount -= wr.wage;
+            wr.rec.wg += wr.wage;
             wr.unpaid = 0;
             changeLoyalty(wr, 0.3);
         }
         else {
             wr.unpaid++;
+            wr.rec.ud++;
             changeLoyalty(wr, wr.perks.includes('greedy') ? -8 : -4);
-            if (wr.unpaid === 1){ messageQueue(loc('sw_unpaid',[wr.name]),'warning',false,['combat']); }
+            if (wr.unpaid === 1){
+                messageQueue(loc('sw_unpaid',[wr.name]),'warning',false,['combat']);
+                chron(wr, 'sw_ch_unpaid');
+            }
         }
         if (wr.status === 'resting'){
-            wr.meter = Math.max(0, wr.meter - warriorVars.restDecay);
+            wr.rec.rd++;
+            let floor = floorOf(wr);
+            if (wr.meter > floor){ wr.meter = Math.max(floor, wr.meter - restRate()); }
             if (wr.temper === 'proud'){ changeLoyalty(wr, -0.4); }
         }
         else {
             wr.meter += warriorVars.activeGain * meterMult(wr);
         }
-        if (wr.meter >= 100){ awaken(wr); return; }
+        if (checkMeter(wr)){ return; }
 
         // Desertion
         if ((wr.loyalty < 10 || (wr.loyalty < 20 && wr.unpaid >= 3)) && Math.rand(0, 100) < 3){
-            w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
+            removeFromRoster(wr);
+            chron(wr, 'sw_ch_deserted');
             addHall(wr, 'deserted');
             let rogue = (wr.loyalty < 5 ? 60 : 30) * temperaments[wr.temper].rogue;
             if (Math.rand(0, 100) < rogue){
-                w.grudges.push({ name: wr.name, str: bossStrength(wr, 1.2), due: (global.stats.days || 0) + rand(30, 90) });
+                w.grudges.push({ id: wr.id, name: wr.name, str: bossStrength(wr, 1.2), due: today() + rand(30, 90), former: formerOf(wr) });
             }
             messageQueue(loc('sw_deserted',[wr.name]),'danger',false,['combat']);
         }
     });
 
+    exileTick(w);
+    wildTick(w);
+
     // Old grudges come due
-    let today = global.stats.days || 0;
+    let now = today();
     for (let i = w.grudges.length - 1; i >= 0; i--){
-        if (today >= w.grudges[i].due){
+        if (now >= w.grudges[i].due){
             let g = w.grudges.splice(i, 1)[0];
-            w.named.push({ name: g.name, str: g.str, kind: 'rogue' });
+            w.named.push({ id: g.id, name: g.name, str: g.str, kind: 'rogue', former: g.former });
+            if (g.id !== undefined){ w.vets = w.vets.filter(v => v.id !== g.id); }
             messageQueue(loc('sw_grudge',[g.name]),'danger',false,['combat']);
         }
     }
@@ -437,25 +988,27 @@ function dailyTick(w){
 // Combat hooks
 // ---------------------------------------------------------------------------
 
+function pw(wr){ return wr.fp ? warriorVars.fullBonus : 1; }
+
 export function warriorsArmyBonus(){
-    let total = active().reduce((t, wr) => t + might(wr), 0);
+    let total = active().reduce((t, wr) => t + might(wr) * pw(wr), 0);
     return total / warriorVars.armyDivisor;
 }
 
 export function warriorsHuntMult(){
     let a = active();
-    let sense = a.reduce((t, wr) => t + wr.stats.sns, 0) / warriorVars.senseDivisor;
-    let quick = a.filter(wr => wr.perks.includes('quick_draw')).length * 0.1;
+    let sense = a.reduce((t, wr) => t + wr.stats.sns * pw(wr), 0) / warriorVars.senseDivisor;
+    let quick = a.reduce((t, wr) => t + (wr.perks.includes('quick_draw') ? 0.1 * pw(wr) : 0), 0);
     return 1 + sense + quick;
 }
 
 export function warriorsLossMult(){
-    let def = active().filter(wr => wr.perks.includes('defensive')).length * 0.25;
+    let def = active().reduce((t, wr) => t + (wr.perks.includes('defensive') ? 0.25 * pw(wr) : 0), 0);
     return 1 - Math.min(0.75, def);
 }
 
 export function warriorsStressCut(){
-    let will = active().reduce((t, wr) => t + wr.stats.wil, 0) / warriorVars.willDivisor;
+    let will = active().reduce((t, wr) => t + wr.stats.wil * pw(wr), 0) / warriorVars.willDivisor;
     return Math.min(0.5, will);
 }
 
@@ -464,7 +1017,7 @@ export function warriorsStressAdd(){
 }
 
 export function warriorsCdMult(){
-    let spd = active().reduce((t, wr) => t + wr.stats.spd, 0) / warriorVars.speedCdCut;
+    let spd = active().reduce((t, wr) => t + wr.stats.spd * pw(wr), 0) / warriorVars.speedCdCut;
     return 1 - Math.min(0.5, spd);
 }
 
@@ -475,22 +1028,62 @@ function defyChance(wr){
 }
 
 // Called after any fight. kind: hunt | abyss | raid | campaign
-export function warriorsBattle(kind, won){
+// info (optional): { target: named boss or 'generic', dmg: Abyssal damage, kill: Abyssal One slain }
+export function warriorsBattle(kind, won, info){
     if (!yokiActive()){ return; }
     let f = fights[kind];
     if (!f){ return; }
-    let w = warriorState();
-    active().forEach(wr => {
+    info = info || {};
+    let fighters = active();
+
+    // Credit for the fight goes to everyone who was there.
+    if (fighters.length){
+        let totalMight = fighters.reduce((t, wr) => t + might(wr) * pw(wr), 0) || 1;
+        let blow = null;
+        if (info.kill){
+            let roll = Math.rand(0, 1000) / 1000 * totalMight;
+            blow = fighters.find(wr => (roll -= might(wr) * pw(wr)) <= 0) || fighters[fighters.length - 1];
+        }
+        fighters.forEach(wr => {
+            wr.rec.b[kind][won ? 0 : 1]++;
+            if (info.dmg){ wr.rec.ad += Math.round(info.dmg * might(wr) * pw(wr) / totalMight); }
+            if (blow && blow.id === wr.id){
+                wr.rec.ak++;
+                chron(wr, 'sw_ch_abyss_blow', [info.killName || '']);
+            }
+            if (won && info.target){
+                let t = info.target;
+                if (t === 'generic' || t.kind === 'wild' || t.kind === 'awakened'){ wr.rec.aw++; }
+                if (t !== 'generic'){
+                    wr.rec.ns++;
+                    if (t.kind === 'awakened' || t.kind === 'rogue'){
+                        wr.rec.fs++;
+                        chron(wr, 'sw_ch_slew_sister', [t.name]);
+                    }
+                    else {
+                        chron(wr, 'sw_ch_slew', [t.name]);
+                    }
+                }
+            }
+        });
+    }
+
+    fighters.forEach(wr => {
         // Death check
         let death = (won ? f[3] : f[4]) * (1.25 - wr.stats.spd / 200);
         if (death > 0 && Math.rand(0, 10000) < death * 100){
             if (Math.rand(0, 100) < defyChance(wr)){
-                wr.meter += 20;
+                wr.meter += warriorVars.defyMeter;
+                wr.defied++;
+                wr.rec.dd++;
+                chron(wr, 'sw_ch_defied');
                 messageQueue(loc('sw_defied',[wr.name]),'special',false,['combat']);
             }
             else {
-                w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
+                removeFromRoster(wr);
+                chron(wr, 'sw_ch_fell');
                 addHall(wr, 'fell');
+                comradeLost(wr);
                 moraleHit(3, wr.id);
                 messageQueue(loc('sw_fell',[wr.name]),'danger',false,['combat']);
                 return;
@@ -499,13 +1092,78 @@ export function warriorsBattle(kind, won){
         wr.meter += f[0] * meterMult(wr);
         changeLoyalty(wr, won ? 1 : -1);
         gainXp(wr, won ? f[1] : f[2]);
-        if (wr.meter >= 100){ awaken(wr); }
+        checkMeter(wr);
     });
+}
+
+// The rewritten Unbroken achievement: first space mission with 3+ warriors, none ever Awakened.
+export function unbrokenCheck(){
+    let w = global.race['warriors'];
+    return w && w.woke === 0 && w.roster.length >= 3;
+}
+
+// ---------------------------------------------------------------------------
+// Service record
+// ---------------------------------------------------------------------------
+
+function battlesOf(rec){
+    let won = 0, lost = 0;
+    battleKinds.forEach(k => { won += rec.b[k][0]; lost += rec.b[k][1]; });
+    return { won, lost, total: won + lost };
+}
+
+export function recordSummary(wr){
+    let rec = wr.rec;
+    if (!rec){ return ''; }
+    let b = battlesOf(rec);
+    return loc('sw_rec_summary',[rec.j === null ? '-' : rec.j, rec.sd, b.total, b.won, rec.aw, rec.dd]);
+}
+
+function esc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Full record as HTML for a warrior (roster, veteran) or a Hall entry.
+export function recordHtml(src, isHall){
+    let rec = src.rec;
+    let name = isHall ? src.n : src.name;
+    if (!rec){ return `<p>${loc('sw_rec_none')}</p>`; }
+    let stats = isHall ? src.s : src.stats;
+    let rank = isHall ? src.r : rankOf(src);
+    let lvl = isHall ? src.l : src.lvl;
+    let b = battlesOf(rec);
+    let row = (k, v) => `<tr><td class="has-text-label" style="padding:0.1rem 0.6rem 0.1rem 0">${k}</td><td style="padding:0.1rem 0">${v}</td></tr>`;
+    let html = `<div style="font-size:0.9rem"><table>`;
+    html += row(loc('sw_rec_rank'), loc('sw_rec_rank_v',[rank, rec.r0, rec.rb, lvl]));
+    html += row(loc('sw_rec_service'), loc('sw_rec_service_v',[rec.j === null ? '-' : rec.j, rec.sd, rec.st]));
+    html += row(loc('sw_rec_pay'), loc('sw_rec_pay_v',[sizeApproximation(rec.fee, 1), sizeApproximation(rec.wg, 1), rec.ud]));
+    html += row(loc('sw_rec_rest'), loc('sw_rec_rest_v',[rec.rd, rec.rn]));
+    html += row(loc('sw_rec_battles'), loc('sw_rec_battles_v',[b.total, b.won, b.lost]));
+    html += row('', battleKinds.filter(k => rec.b[k][0] + rec.b[k][1] > 0).map(k => `${loc(`wiki_warriors_fight_${k}`)} ${rec.b[k][0]}/${rec.b[k][1]}`).join(' · ') || '-');
+    html += row(loc('sw_rec_kills'), loc('sw_rec_kills_v',[rec.aw, rec.ns, rec.fs]));
+    if (rec.ad > 0 || rec.ak > 0){ html += row(loc('sw_rec_abyss'), loc('sw_rec_abyss_v',[Math.round(rec.ad).toLocaleString(), rec.ak])); }
+    html += row(loc('sw_rec_trials'), loc('sw_rec_trials_v',[rec.cl, rec.dd, rec.pm, rec.ll]));
+    if (stats && rec.s0){
+        html += row(loc('sw_rec_stats'), warriorVars.stats.map(s => `${loc(`sw_stat_${s}`).slice(0,3)} ${rec.s0[s]}→${stats[s]}`).join(' · '));
+    }
+    html += `</table>`;
+    let ch = isHall ? (src.ch || []) : (src.chron || []);
+    if (ch.length){
+        html += `<div class="has-text-warning" style="margin-top:0.5rem">${loc('sw_rec_chronicle')}</div>`;
+        html += ch.slice().reverse().map(c => `<div><span class="has-text-label">${loc('sw_rec_day',[c.d])}</span> ${esc(loc(c.k, c.a.map(a => esc(a))))}</div>`).join('');
+    }
+    html += `</div>`;
+    return `<div class="has-text-warning" style="font-size:1.1rem; margin-bottom:0.4rem">${esc(name)}</div>` + html;
 }
 
 // ---------------------------------------------------------------------------
 // UI (Civics → Military)
 // ---------------------------------------------------------------------------
+
+function costText(cost){
+    let parts = Object.keys(cost).map(r => r === 'Money' ? `$${sizeApproximation(cost[r], 1)}` : `${sizeApproximation(cost[r], 1)} ${global.resource[r] ? global.resource[r].name : r}`);
+    return parts.length ? parts.join(', ') : loc('sw_seat_free');
+}
 
 export function drawWarriors(){
     let el = $('#silverWarriors');
@@ -524,30 +1182,62 @@ export function drawWarriors(){
         </div>`).join('');
 
     let perkChips = (src) => `<span v-for="p in ${src}.perks" :key="p" :title="perkDesc(p)" :class="perkClass(p)" style="margin-right:0.5rem; font-size:0.85rem;">{{ perkName(p) }}</span>`;
+    let box = 'border:1px solid rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem; max-width:100%;';
 
     panel.append(`
-        <h2 class="has-text-warning">${loc('sw_title')} <span class="has-text-label" style="font-size:0.9rem">({{ w.roster.length }} / {{ slots() }})</span></h2>
+        <h2 class="has-text-warning">${loc('sw_title')} <span class="has-text-label" style="font-size:0.9rem">({{ w.roster.length }} / {{ seats() }})</span></h2>
         <div class="has-text-label" style="font-size:0.85rem; margin-bottom:0.5rem">${loc('sw_intro')}</div>
 
+        <div style="font-size:0.85rem; margin-bottom:0.5rem">
+            <div v-if="next()">
+                <span class="has-text-warning">${loc('sw_seat')} {{ next().n }}:</span>
+                <span :class="next().ready ? 'has-text-success' : 'has-text-danger'">{{ seatReq(next().req) }}</span>
+                · {{ seatCost(next().cost) }}
+                <button class="button is-small" style="margin-left:0.3rem" :disabled="!next().ready || !canPay(next().cost)" @click="commission()">${loc('sw_seat_buy')}</button>
+            </div>
+            <div v-else class="has-text-label">${loc('sw_seat_all')}</div>
+            <div>${loc('sw_handlers')}: {{ hUsed() }} / {{ hCount() }}<span v-if="tCap() > 0"> · ${loc('sw_tonic')}: {{ Math.floor(w.tonic) }} / {{ tCap() }}</span></div>
+        </div>
+
         <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
-            <div v-for="wr in w.roster" :key="wr.id" style="border:1px solid rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem;">
+            <div v-for="wr in w.roster" :key="wr.id" :style="'${box}' + (wr.fp ? ' border-color:#c33;' : '')">
                 <div style="display:flex; justify-content:space-between">
-                    <span><b class="has-text-warning">{{ wr.name }}</b> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
+                    <span><a class="has-text-warning" style="font-weight:bold" :title="summary(wr)" @click="showRecord(wr)">{{ wr.name }}</a> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
                     <span>${loc('sw_level')} {{ wr.lvl }} <span class="has-text-label" style="font-size:0.8rem">({{ wr.xp }}/${warriorVars.xpPerLevel})</span></span>
                 </div>
                 <div style="font-size:0.85rem">
                     <span :class="wr.status === 'active' ? 'has-text-success' : 'has-text-caution'">{{ wr.status === 'active' ? '${loc('sw_active')}' : '${loc('sw_resting')}' }}</span>
                     · {{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}
+                    <span v-if="wr.fp" class="has-text-danger"> · ${loc('sw_full')}</span>
                 </div>
                 ${statRow('wr')}
                 <div>${perkChips('wr')}</div>
                 <div style="font-size:0.85rem">${loc('sw_loyalty')}: <span :class="loyClass(wr)">{{ Math.round(wr.loyalty) }} ({{ mood(wr) }})</span></div>
-                <div style="font-size:0.85rem">${loc('sw_meter')}: <span :class="wr.meter >= 75 ? 'has-text-danger' : 'has-text-warning'">{{ Math.floor(wr.meter) }}%</span></div>
-                <div style="font-size:0.85rem">${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}<span v-if="wr.unpaid > 0" class="has-text-danger"> (${loc('sw_unpaid_short')} {{ wr.unpaid }})</span></div>
-                <div style="margin-top:0.4rem; display:flex; gap:0.3rem;">
+                <div style="font-size:0.85rem">${loc('sw_meter')}: <span :class="meterClass(wr)">{{ Math.floor(wr.meter) }}</span>
+                    <span v-if="stage(wr) > 0" :class="meterClass(wr)"> · {{ warnText(wr) }}</span>
+                    <span v-if="atFloor(wr)" class="has-text-label"> · ${loc('sw_at_floor')}</span>
+                </div>
+                <div style="font-size:0.85rem">${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}<span v-if="wr.unpaid > 0" class="has-text-danger"> (${loc('sw_unpaid_short')} {{ wr.unpaid }})</span>
+                    <span v-if="wr.hd" class="has-text-success"> · ${loc('sw_handler_on')}</span></div>
+                <div v-if="wr.card" style="margin-top:0.4rem; border:1px solid #c33; border-radius:4px; padding:0.4rem; font-size:0.85rem;">
+                    <div class="has-text-danger">${loc('sw_card_title')}</div>
+                    <div>${loc('sw_card_text')}</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.3rem;">
+                        <button class="button is-small" title="${loc('sw_card_honour_tip')}" @click="card(wr.id,'honour')">${loc('sw_card_honour')}</button>
+                        <button class="button is-small" :disabled="w.tonic < 1" title="${loc('sw_card_tonic_tip',[warriorVars.tonicFail])}" @click="card(wr.id,'tonic')">${loc('sw_card_tonic')}</button>
+                        <button class="button is-small" title="${loc('sw_card_rest_tip',[warriorVars.restSaveRisk])}" @click="card(wr.id,'rest')">${loc('sw_card_rest')}</button>
+                        <button class="button is-small" title="${loc('sw_card_ignore_tip')}" @click="card(wr.id,'ignore')">${loc('sw_card_ignore')}</button>
+                    </div>
+                </div>
+                <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.3rem;">
                     <button class="button is-small" :disabled="wr.cd > 0" @click="rest(wr.id)">{{ wr.cd > 0 ? wr.cd + 's' : (wr.status === 'active' ? '${loc('sw_rest')}' : '${loc('sw_activate')}') }}</button>
+                    <button class="button is-small" :class="wr.fp ? 'is-danger' : ''" :disabled="wr.status !== 'active'" title="${loc('sw_full_tip',[warriorVars.fullBonus, warriorVars.fullMeter])}" @click="full(wr.id)">${loc('sw_full_btn')}</button>
+                    <button class="button is-small" :disabled="!wr.hd && hUsed() >= hCount()" title="${loc('sw_handler_tip',[warriorVars.handlerCut * 100])}" @click="handler(wr.id)">{{ wr.hd ? '${loc('sw_handler_off')}' : '${loc('sw_handler_btn')}' }}</button>
+                    <button v-if="tCap() > 0" class="button is-small" :disabled="w.tonic < 1" title="${loc('sw_tonic_tip',[warriorVars.tonicCut])}" @click="tonic(wr.id)">${loc('sw_tonic_btn')}</button>
+                    <button class="button is-small" @click="showRecord(wr)">${loc('sw_record')}</button>
                     <button class="button is-small" @click="renameW(wr)">${loc('sw_rename')}</button>
                     <button class="button is-small" @click="retireW(wr)">${loc('sw_retire')}</button>
+                    <button class="button is-small" @click="dismissW(wr)">${loc('sw_dismiss')}</button>
                 </div>
             </div>
         </div>
@@ -557,7 +1247,8 @@ export function drawWarriors(){
             <button class="button is-small" style="margin-left:0.5rem" @click="refresh()">${loc('sw_refresh')} (\${{ money(refreshCost()) }})</button>
         </h3>
         <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
-            <div v-for="wr in w.pool" :key="wr.id" style="border:1px dashed rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem;">
+            <div v-for="wr in w.pool" :key="wr.id" style="${box} border-style:dashed;">
+                <div v-if="wr.returning" class="has-text-success" style="font-size:0.85rem">${loc('sw_former')} ({{ moodName(wr.mood) }})</div>
                 <div style="display:flex; justify-content:space-between">
                     <span><b>{{ wr.name }}</b> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
                     <span>${loc('sw_level')} {{ wr.lvl }}</span>
@@ -565,15 +1256,26 @@ export function drawWarriors(){
                 <div style="font-size:0.85rem">{{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}</div>
                 ${statRow('wr')}
                 <div>${perkChips('wr')}</div>
-                <div style="font-size:0.85rem">${loc('sw_fee')}: \${{ money(wr.fee) }} · ${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}</div>
-                <button class="button is-small" style="margin-top:0.4rem" :disabled="w.roster.length >= slots() || !afford(wr.fee)" @click="hireW(wr.id)">${loc('sw_hire')}</button>
+                <div style="font-size:0.85rem">${loc('sw_fee')}: \${{ money(wr.fee) }} · ${loc('sw_wage')}: \${{ money(wage(wr)) }} ${loc('sw_per_day')}</div>
+                <div style="margin-top:0.4rem; display:flex; gap:0.3rem;">
+                    <button class="button is-small" :disabled="w.roster.length >= seats() || !afford(wr.fee)" @click="hireW(wr.id)">${loc('sw_hire')}</button>
+                    <button v-if="wr.returning" class="button is-small" @click="showRecord(wr)">${loc('sw_record')}</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="w.vets.length" style="margin-top:1rem">
+            <h3 class="has-text-warning">${loc('sw_vets')}</h3>
+            <div v-for="v in w.vets" :key="v.id" style="font-size:0.85rem">
+                <a class="has-text-warning" @click="showRecord(v)">{{ v.name }}</a> (No. {{ rank(v) }}, ${loc('sw_level')} {{ v.lvl }}):
+                {{ howName(v.how) }}, <span :class="moodClass(v.mood)">{{ moodName(v.mood) }}</span>, ${loc('sw_vet_away')} {{ away(v) }} ${loc('sw_days')}<span v-if="v.rise" class="has-text-danger"> · ${loc('sw_vet_restless')}</span>
             </div>
         </div>
 
         <div v-if="hallList().length" style="margin-top:1rem">
             <h3 class="has-text-warning">${loc('sw_hall')}</h3>
             <div v-for="(h, i) in hallList()" :key="i" style="font-size:0.85rem">
-                <b>{{ h.n }}</b><span v-if="h.l"> (No. {{ h.r }}, ${loc('sw_level')} {{ h.l }})</span>: {{ fate(h.f) }}
+                <a v-if="h.rec" @click="showHall(h)"><b>{{ h.n }}</b></a><b v-else>{{ h.n }}</b><span v-if="h.l"> (No. {{ h.r }}, ${loc('sw_level')} {{ h.l }})</span>: {{ fate(h.f) }}
             </div>
         </div>
     `);
@@ -582,10 +1284,19 @@ export function drawWarriors(){
         el: '#silverWarriors',
         data: { w: w },
         methods: {
-            unlocked(){ return yokiActive() && slots() > 0; },
-            slots(){ return slots(); },
+            unlocked(){ return yokiActive() && (seats() > 0 || orgCount() > 0); },
+            seats(){ return seats(); },
+            next(){ return nextSeat(); },
+            seatReq(r){ return loc(`sw_seat_req_${r}`); },
+            seatCost(c){ return costText(c); },
+            canPay(c){ return canPay(c); },
+            commission(){ commissionSeat(); },
+            hCount(){ return handlerCount(); },
+            hUsed(){ return handlersUsed(); },
+            tCap(){ return tonicCap(); },
             rank(wr){ return rankOf(wr); },
             pot(wr){ return potential(wr); },
+            wage(wr){ return baseWage(wr); },
             money(v){ return sizeApproximation(v, 1); },
             afford(v){ return global.resource.Money.amount >= v; },
             perkName(p){ return loc(`sw_perk_${p}`); },
@@ -593,13 +1304,32 @@ export function drawWarriors(){
             perkClass(p){ return perkList[p] && perkList[p].good ? 'has-text-success' : 'has-text-danger'; },
             temperName(t){ return loc(`sw_temper_${t}`); },
             mood(wr){ return wr.loyalty >= 75 ? loc('sw_mood_devoted') : wr.loyalty >= 50 ? loc('sw_mood_content') : wr.loyalty >= 25 ? loc('sw_mood_uneasy') : loc('sw_mood_resentful'); },
+            moodName(m){ return loc(`sw_mood_${m}`); },
+            moodClass(m){ return m === 'grateful' ? 'has-text-success' : m === 'neutral' ? 'has-text-warning' : 'has-text-danger'; },
+            howName(h){ return loc(`sw_fate_${h}`); },
+            away(v){ return today() - v.left; },
             loyClass(wr){ return wr.loyalty >= 50 ? 'has-text-success' : wr.loyalty >= 25 ? 'has-text-warning' : 'has-text-danger'; },
+            stage(wr){ return stageOf(wr); },
+            warnText(wr){ return loc(`sw_warn_short_${stageOf(wr)}`); },
+            meterClass(wr){ let s = stageOf(wr); return s >= 2 ? 'has-text-danger' : s === 1 ? 'has-text-caution' : 'has-text-warning'; },
+            atFloor(wr){ return wr.status === 'resting' && wr.meter > 0 && wr.meter <= floorOf(wr) + 0.01; },
+            summary(wr){ return recordSummary(wr); },
             fate(f){ return loc(`sw_fate_${f}`); },
             hallList(){ return hall().slice(0, 15); },
             refreshCost(){ return refreshCost(); },
             refresh(){ refreshPool(true); },
             hireW(id){ hire(id); },
             rest(id){ toggleRest(id); },
+            full(id){ toggleFull(id); },
+            handler(id){ toggleHandler(id); },
+            tonic(id){ useTonic(id); },
+            card(id, c){ blackCard(id, c); },
+            showRecord(wr){
+                this.$buefy.dialog.alert({ message: recordHtml(wr, false), confirmText: loc('sw_close'), canCancel: ['escape','outside'] });
+            },
+            showHall(h){
+                this.$buefy.dialog.alert({ message: recordHtml(h, true), confirmText: loc('sw_close'), canCancel: ['escape','outside'] });
+            },
             renameW(wr){
                 this.$buefy.dialog.prompt({
                     message: loc('sw_rename_prompt'),
@@ -609,10 +1339,21 @@ export function drawWarriors(){
                 });
             },
             retireW(wr){
+                let cost = retireCost(wr);
+                let msg = loc('sw_retire_confirm',[wr.name, sizeApproximation(severance(wr), 1), sizeApproximation(backPay(wr), 1), sizeApproximation(cost, 1), loc(`sw_mood_${partingMood(wr,'retired')}`)]);
+                if (global.resource.Money.amount < cost){ msg += `<br><span class="has-text-danger">${loc('sw_retire_poor')}</span>`; }
                 this.$buefy.dialog.confirm({
-                    message: loc('sw_retire_confirm',[wr.name]),
+                    message: msg,
                     confirmText: loc('sw_retire'),
                     onConfirm: () => retire(wr.id)
+                });
+            },
+            dismissW(wr){
+                this.$buefy.dialog.confirm({
+                    message: loc('sw_dismiss_confirm',[wr.name, Math.round(dismissHit(wr) * 10) / 10, loc(`sw_mood_${partingMood(wr,'dismissed')}`)]),
+                    confirmText: loc('sw_dismiss'),
+                    type: 'is-danger',
+                    onConfirm: () => dismiss(wr.id)
                 });
             }
         }

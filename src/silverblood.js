@@ -1,31 +1,25 @@
 // Expansion: Silverblood race mechanics.
 //
-// Awakening meter: soldiers with Demon Power (yoki_power) slowly build up
-// Awakening. The Organization building and Handler job hold it back.
-// At 100% a warrior Awakens and becomes a monster that must be hunted.
+// Only named warriors (src/warriors.js) can Awaken. Garrison soldiers are
+// human. Awakened Ones at large (your own fallen warriors, grudge-holders
+// and wild Awakened) kill soldiers and add stress until they are hunted.
 //
-// State lives in global.race.awakening = { m, boss, str, rate, hunts }.
+// State lives in global.race.awakening = { boss, str, hunts, abyss }.
+// boss/str are legacy generic Awakened Ones from saves made before v1.2.
 
 import { global } from './vars.js';
 import { loc } from './locale.js';
-import { traits } from './races.js';
 import { armyRating, garrisonSize, soldierDeath } from './civics.js';
 import { messageQueue } from './functions.js';
 import { unlockAchieve, unlockFeat } from './achieve.js';
 import { planetTraits } from './races.js';
-import { warriorsTick, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated } from './warriors.js';
+import { warriorsTick, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated, unbrokenCheck, warriorVars, stageOf } from './warriors.js';
 import { drawCity, initStruct, actions } from './actions.js';
 
 export const yokiVars = {
-    soldierGain: 0.004,   // meter %/s per healthy soldier
-    woundGain: 0.012,     // extra meter %/s per wounded soldier
-    battleGain: 4,        // meter % per offensive campaign
-    orgCalm: 0.03,        // meter %/s removed per Organization
-    handlerCalm: 0.06,    // meter %/s removed per Handler
-    resetTo: 25,          // meter after an Awakening
-    maxBoss: 3,           // most Awakened Ones alive at once
     rampage: 40,          // ~1 in N chance per second, per Awakened One, to kill a soldier
     stressPerBoss: 3,     // morale stress per Awakened One
+    hallUpkeep: 1.5,      // Money per second per Silent Hall
 };
 
 export function yokiActive(){
@@ -34,11 +28,14 @@ export function yokiActive(){
 
 export function yokiState(){
     if (!global.race['awakening']){
-        global.race['awakening'] = { m: 0, boss: 0, str: 0, rate: 0, hunts: 0 };
+        global.race['awakening'] = { boss: 0, str: 0, hunts: 0 };
     }
     let a = global.race.awakening;
-    if (a.woke === undefined){ a.woke = 0; }   // Awakenings this run
+    if (a.boss === undefined){ a.boss = 0; }
+    if (a.str === undefined){ a.str = 0; }
+    if (a.hunts === undefined){ a.hunts = 0; }
     if (!a.abyss){ a.abyss = { slain: 0, hp: 0, cd: 0 }; }
+    ['m','rate','woke'].forEach(k => { if (a[k] !== undefined){ delete a[k]; } }); // old global meter
     return a;
 }
 
@@ -50,48 +47,67 @@ function newStrength(){
     return Math.rand(30, 61) * techFactor();
 }
 
-function orgCount(){
-    return global.city['organization'] ? global.city.organization.count : 0;
+function monsterCount(){
+    return yokiState().boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
 }
 
-function handlers(){
-    return global.civic['handler'] ? global.civic.handler.workers : 0;
+// ---------------------------------------------------------------------------
+// Silent Hall upkeep (from the fast loop, 4 times a second)
+// ---------------------------------------------------------------------------
+
+let funded = 0;
+
+export function hallsFunded(){
+    return funded;
 }
 
-// Per-second rates, also used for tooltips.
-export function yokiRates(){
-    let gain = 0;
-    if (global.civic['garrison']){
-        let mult = traits.yoki_power.vars()[1] / 100 * (1 - yokiState().abyss.slain * abyssVars.calmReward);
-        let wounded = global.civic.garrison.wounded || 0;
-        let healthy = Math.max(0, garrisonSize() - wounded);
-        gain = (healthy * yokiVars.soldierGain + wounded * yokiVars.woundGain) * mult;
+export function silentHallUpkeep(breakdown, time_multiplier){
+    if (!yokiActive() || !global.city['silent_hall'] || !global.city.silent_hall.count){
+        funded = 0;
+        return;
     }
-    let calm = orgCount() * yokiVars.orgCalm + handlers() * yokiVars.handlerCalm;
-    return { gain, calm, net: gain - calm };
+    let count = global.city.silent_hall.count;
+    let per = yokiVars.hallUpkeep * time_multiplier;
+    let on = Math.min(count, Math.floor(global.resource.Money.amount / per));
+    funded = on;
+    if (on > 0){
+        global.resource.Money.amount -= on * per;
+        breakdown.p.consume.Money[loc('city_silent_hall')] = -(on * yokiVars.hallUpkeep);
+    }
+}
+
+export function silentHallEffect(isWiki){
+    let desc = `<div>${loc('city_silent_hall_effect',[warriorVars.hallRest * 100, warriorVars.hallRestMax * 100])}</div>`;
+    desc += `<div>${loc('city_silent_hall_effect2',[warriorVars.floorHallCut * 100, warriorVars.floorCapMin * 100])}</div>`;
+    desc += `<div class="has-text-caution">${loc('city_silent_hall_upkeep',[yokiVars.hallUpkeep])}</div>`;
+    if (!isWiki && global.city['silent_hall'] && global.city.silent_hall.count > funded){
+        desc += `<div class="has-text-danger">${loc('city_silent_hall_unfunded',[global.city.silent_hall.count - funded])}</div>`;
+    }
+    return desc;
+}
+
+export function apothecaryEffect(isWiki){
+    return `<div>${loc('city_apothecary_effect',[warriorVars.tonicDays, warriorVars.tonicCut])}</div><div>${loc('city_apothecary_effect2')}</div>`;
+}
+
+export function organizationEffect(){
+    return `<div>${loc('city_organization_effect',[warriorVars.orgCalm * 100, warriorVars.orgCalmMax * 100])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div>`;
 }
 
 // Called once per game second from midLoop.
 export function yokiTick(){
     if (!yokiActive()){ return; }
     let a = yokiState();
-    if (!global.city['organization']){
-        initStruct(actions.city.organization);
-    }
-    let r = yokiRates();
-    a.rate = r.net;
-    a.m = Math.min(100, Math.max(0, a.m + r.net));
-
-    if (a.m >= 100){
-        awaken(a);
-    }
+    ['organization','silent_hall','apothecary'].forEach(b => {
+        if (!global.city[b]){ initStruct(actions.city[b]); }
+    });
     if (a.abyss.cd > 0){ a.abyss.cd--; }
     warriorsTick();
-    if (a.woke === 0 && global.tech['space'] && global.tech.space >= 2){
+    if (global.tech['space'] && global.tech.space >= 2 && unbrokenCheck()){
         unlockAchieve('unbroken');
     }
 
-    let monsters = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
+    let monsters = monsterCount();
     if (monsters > 0 && global.civic['garrison'] && global.civic.garrison.workers > 0){
         for (let i = 0; i < monsters; i++){
             if (Math.rand(0, yokiVars.rampage) === 0){
@@ -103,34 +119,12 @@ export function yokiTick(){
     }
 }
 
-function awaken(a){
-    a.m = yokiVars.resetTo;
-    a.woke++;
-    if (a.boss >= yokiVars.maxBoss){
-        // Already overrun: the new monster takes soldiers with it instead.
-        let killed = Math.min(Math.rand(2, 6), global.civic.garrison.workers);
-        soldierDeath(killed);
-        messageQueue(loc('yoki_awaken_overrun',[killed]),'danger',false,['combat']);
-        return;
-    }
-    let wasZero = a.boss === 0;
-    a.boss++;
-    a.str = Math.max(a.str, newStrength());
-    messageQueue(loc('yoki_awaken',[a.boss]),'danger',false,['combat']);
-    if (wasZero){ drawCity(); }
-}
-
-// Battles push warriors closer to the edge.
-export function yokiBattle(){
-    if (!yokiActive()){ return; }
-    let a = yokiState();
-    a.m = Math.min(100, a.m + yokiVars.battleGain);
-}
+// Kept for older callers: battles no longer fill a global meter.
+export function yokiBattle(){}
 
 export function yokiStress(){
     if (!yokiActive()){ return 0; }
-    let named = global.race['warriors'] ? global.race.warriors.named.length : 0;
-    return (yokiState().boss + named) * yokiVars.stressPerBoss + warriorsStressAdd();
+    return monsterCount() * yokiVars.stressPerBoss + warriorsStressAdd();
 }
 
 export function yokiStressCut(){
@@ -139,10 +133,10 @@ export function yokiStressCut(){
 }
 
 export function yokiHuntAvailable(){
-    return yokiActive() && (yokiState().boss > 0 || namedBoss() !== null);
+    return yokiActive() && monsterCount() > 0;
 }
 
-// The "Hunt the Awakened" action. Named bosses (your own fallen warriors) come first.
+// The "Hunt the Awakened" action. Named targets come first, then old generic ones.
 export function yokiHunt(){
     let a = yokiState();
     let named = namedBoss();
@@ -169,14 +163,15 @@ export function yokiHunt(){
         if (global.stats.awakened_slain >= 50){ unlockAchieve('silver_hunter'); }
         if (named){
             namedDefeated();
-            messageQueue(loc(named.kind === 'rogue' ? 'sw_hunt_rogue_win' : 'sw_hunt_named_win',[named.name, killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
+            let key = named.kind === 'rogue' ? 'sw_hunt_rogue_win' : named.kind === 'wild' ? 'sw_hunt_wild_win' : 'sw_hunt_named_win';
+            messageQueue(loc(key,[named.name, killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
         }
         else {
             a.boss--;
             a.str = a.boss > 0 ? newStrength() : 0;
             messageQueue(loc('yoki_hunt_win',[killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
         }
-        warriorsBattle('hunt', true);
+        warriorsBattle('hunt', true, { target: named || 'generic' });
         if (!yokiHuntAvailable()){ drawCity(); }
     }
     else {
@@ -188,7 +183,7 @@ export function yokiHunt(){
         if (named){ named.str = Math.max(1, Math.round(named.str * 0.8)); }
         else { a.str = Math.max(1, Math.round(a.str * 0.8)); }
         messageQueue(loc('yoki_hunt_loss',[killed, hurt]),'danger',false,['combat']);
-        warriorsBattle('hunt', false);
+        warriorsBattle('hunt', false, { target: named || 'generic' });
     }
     return false;
 }
@@ -197,29 +192,29 @@ export function yokiHuntEffect(){
     let a = yokiState();
     let named = namedBoss();
     let army = global.civic['garrison'] ? Math.round(armyRating(garrisonSize(), 'army', global.civic.garrison.wounded) * warriorsHuntMult()) : 0;
-    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
-    let desc = `<div>${loc('city_hunt_awakened_effect',[total])}</div>`;
-    if (named){ desc += `<div class="has-text-danger">${loc(named.kind === 'rogue' ? 'sw_hunt_target_rogue' : 'sw_hunt_target_named',[named.name])}</div>`; }
+    let desc = `<div>${loc('city_hunt_awakened_effect',[monsterCount()])}</div>`;
+    if (named){
+        let key = named.kind === 'rogue' ? 'sw_hunt_target_rogue' : named.kind === 'wild' ? 'sw_hunt_target_wild' : 'sw_hunt_target_named';
+        desc += `<div class="has-text-danger">${loc(key,[named.name])}</div>`;
+        if (named.former){ desc += `<div class="has-text-label">${loc('sw_hunt_former',[named.former.r, named.former.sd])}</div>`; }
+    }
     return desc + `<div class="has-text-caution">${loc('city_hunt_awakened_effect2',[Math.round(named ? named.str : a.str), army])}</div>`;
 }
 
-// Text for the race header.
+// Text for the race header: Awakened Ones at large, or a warrior near her limit.
 export function awakeningLabel(){
     if (!yokiActive()){ return ''; }
-    let a = yokiState();
-    let label = `${loc('yoki_meter')} ${Math.floor(a.m)}%`;
-    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
-    if (total > 0){ label += ` (${total})`; }
-    return label;
+    let total = monsterCount();
+    if (total > 0){ return loc('yoki_label_monsters',[total]); }
+    let w = global.race['warriors'];
+    if (w && w.roster.some(wr => wr.bp && stageOf(wr) >= 2)){ return loc('yoki_label_strained'); }
+    return '';
 }
 
 export function awakeningTooltip(){
     if (!yokiActive()){ return ''; }
-    let r = yokiRates();
-    let fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2);
-    let tip = loc('yoki_meter_tooltip',[fmt(r.gain), fmt(-r.calm), fmt(r.net)]);
-    let a = yokiState();
-    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
+    let tip = loc('yoki_label_tooltip');
+    let total = monsterCount();
     if (total > 0){ tip += ' ' + loc('yoki_boss_count',[total]); }
     return tip;
 }
@@ -242,7 +237,6 @@ export function demonRaid(){
     let ready = Math.max(0, garrisonSize() - wounded);
     let strength = Math.rand(10, 41) * techFactor();
     let army = ready > 0 ? armyRating(garrisonSize(), 'army', wounded) * Math.rand(8, 13) / 10 : 0;
-    yokiBattle();
     if (army >= strength){
         let hurt = Math.min(Math.rand(0, Math.ceil(strength / 15) + 1), ready);
         global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
@@ -338,8 +332,7 @@ export function abyssHunt(){
     global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
     ab.hp -= dmg;
     ab.cd = Math.round(abyssVars.cooldown * warriorsCdMult());
-    yokiBattle();
-    warriorsBattle('abyss', ab.hp <= 0);
+    warriorsBattle('abyss', ab.hp <= 0, { dmg, kill: ab.hp <= 0, killName: name });
 
     if (ab.hp <= 0){
         ab.slain++;

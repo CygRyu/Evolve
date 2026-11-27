@@ -66,8 +66,7 @@ Next steps could be custom traits (effects scripted from a whitelist of hooks), 
 This content is built into the game, not part of a mod pack. The code is in `src/silverblood.js`, with small hooks in other files.
 
 - **Race:** Silverblood (humanoid). Traits: Demon Power, Outcast, and half-rank Regenerative. It can be picked on the evolution screen from the first run, once you take the humanoid path.
-- **Awakening meter**, shown beside Morale. Healthy soldiers fill it slowly, wounded soldiers faster, and each offensive campaign adds 4%. At 100% a warrior becomes an **Awakened One** and the meter drops to 25%. At most 3 can be loose at once.
-- Each Awakened One sometimes kills a soldier and adds 3 stress.
+- **Awakening:** only named warriors (`src/warriors.js`) can Awaken, each at her own hidden breaking point. An Awakened warrior, a warrior with a grudge, or a wild Awakened One kills soldiers now and then and adds 3 stress until hunted.
 - **Hunt the Awakened** (Military Complex): your army rating, with some luck, is compared to the monster's strength. A win kills the monster and pays a bounty. A loss costs soldiers but weakens the monster by 20%.
-- **The Organization** (Military Complex): lowers the meter by 0.03% per second and adds one **Handler** job slot. Each Handler lowers it by a further 0.06% per second.
-- Tuning numbers are in `yokiVars` at the top of `src/silverblood.js`.
+- **The Organization**, **Silent Hall** and **Apothecary** (Military Complex), and the **Handler** job, keep warriors stable.
+- Tuning numbers are in `warriorVars`, `seatList` and `wildVars` at the top of `src/warriors.js`, and `yokiVars` in `src/silverblood.js`.
