@@ -41,8 +41,13 @@ Notes:
 
 Notes:
 
-## 4b. Wild Awakened Ones
-- [ ] After the first Organization, wild Awakened Ones with generated names appear now and then (about every 30 minutes early on).
+## 4b. Wild Awakened Ones and duels
+- [ ] After the first Organization, and once you have 10 soldiers, wild Awakened Ones with generated names appear now and then (about every 30 minutes early on). Their strength is never above what your army can hunt.
+- [ ] Awakened Ones never kill your last 3 soldiers.
+- [ ] When one attacks, a warrior sometimes steps in (log message). Check wins, drive-offs (she shows "recovering") and losses. How often did warriors step in? ______
+- [ ] Two warriors sometimes fight together.
+- [ ] Set a warrior to **Hold back**: she stays out (Hot-headed or Volatile ones may disobey).
+- [ ] A warrior on the brink who steps in may Awaken mid-fight. With a sister beside her, she may be cut down instead (Hall: "cut down as she Awakened").
 - [ ] Each one sometimes kills a soldier and adds stress until hunted. At most 3 at once.
 - [ ] They appear more often later, on Monster-infested planets, and as your warriors level up.
 - [ ] Can you avoid all warrior Awakenings until your first space mission, with at least 3 warriors? (That's **Unbroken**.)
@@ -115,6 +120,11 @@ If something feels wrong, these are the numbers to change. Most are in `src/warr
 | Stillwater Tonic | `warriorVars.tonicDays/tonicCut` | 1 per 60 days per Apothecary, -40 meter |
 | Black Card risks | `warriorVars.tonicFail/restSaveRisk` | 15% / 12% |
 | Wild Awakened frequency | `wildVars.era` | 360, 240, 160, 120 days by era |
+| Wild Awakened strength | `wildVars.strMin/strMax/armyMin/armyMax` | era roll, capped at 60-110% of army rating |
+| Duel notice chance | `duelVars.noticeDiv` | Sense / 2 % per warrior |
+| Duel outcomes | `duelVars.repelShare/outDays`, `fights.duel` | win by strength², 60% of the rest repelled, 30% death check on loss |
+| Mercy blow | `duelVars.mercyBase/mercyWilDiv` | 20% + Will / 4 |
+| Garrison safety | `yokiVars.minSoldiers` | last 3 soldiers are never killed |
 | Severance | `warriorVars.sevBase/sevDiv` | wage x (10 + days served / 10) |
 | Rampage chance | `yokiVars.rampage` in `src/silverblood.js` | about 1 in 40 per second |
 | Abyssal health | `abyssVars.hp` | 4k, 9k, 18k, 36k, 75k |

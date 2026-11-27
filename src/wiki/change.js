@@ -4,6 +4,17 @@ import { clearElement } from './../functions.js';
 export const changeList = [
     { // Fan expansion (not part of the official game)
         version: `1.4.10`,
+        revision: ` Silverblood Expansion v1.2 (part 1b)`,
+        date: `11/27/2026`,
+        changes: [
+            `Duels: when an Awakened One attacks your soldiers, an active warrior may step in, alone or with a sister. The win chance depends on their strength against the monster's.`,
+            `A warrior near her limit fights harder, but may Awaken mid-fight. Her sister may strike a mercy blow before the change completes.`,
+            `New Stance per warrior: Intercept or Hold back. Hot-headed and Volatile warriors may disobey.`,
+            `Fix: wild Awakened Ones only appear once your garrison has 10 soldiers, are never stronger than your army can handle, and never kill your last 3 soldiers.`
+        ]
+    },
+    { // Fan expansion (not part of the official game)
+        version: `1.4.10`,
         revision: ` Silverblood Expansion v1.2 (part 1)`,
         date: `11/27/2026`,
         changes: [

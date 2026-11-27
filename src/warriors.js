@@ -14,6 +14,7 @@ import { loc } from './locale.js';
 import { vBind, messageQueue, clearElement } from './functions.js';
 import { yokiActive, yokiState, hallsFunded, abyssVars } from './silverblood.js';
 import { traits } from './races.js';
+import { armyRating, garrisonSize } from './civics.js';
 
 // ---------------------------------------------------------------------------
 // Tuning
@@ -125,7 +126,29 @@ export const wildVars = {
     fameLevels: 60,          // total roster levels for the full fame bonus
     fameMax: 1,              // up to 2x as often
     max: 3,                  // most wild Awakened at large at once
-    strMin: 30, strMax: 60, strMult: 1.25,
+    minSoldiers: 10,         // none appear until your garrison has this many soldiers
+    strMin: 30, strMax: 60, strMult: 1.25, // era strength: x the era multiplier
+    armyMin: 0.6,            // ...but never above 60% to 110% of your army rating when it appears
+    armyMax: 1.1,
+    strFloor: 10,
+};
+
+// Duels: warriors stepping in when an Awakened One attacks the garrison.
+export const duelVars = {
+    noticeDiv: 2,            // chance to notice = Sense / 2 %
+    maxTeam: 2,              // at most two warriors per duel
+    cooldown: 60,            // seconds before the same monster can be fought this way again
+    winMin: 5, winMax: 95,   // win chance limits (%)
+    repelShare: 0.6,         // share of non-wins that drive the monster off
+    repelWeaken: 0.8,        // monster strength after being driven off
+    repelQuiet: 120,         // seconds it stops attacking after being driven off
+    outDays: 3,              // days a warrior needs to recover after a repelled duel
+    brink: [1, 1, 1.1, 1.25],// strength by warning stage (calm, flicker, strained, brink)
+    mercyBase: 20,           // mercy blow chance = base + partner Will / div %
+    mercyWilDiv: 4,
+    mercyMeter: 10,          // meter added to the sister who strikes the mercy blow
+    hotIgnore: 25,           // % chance Hot-headed ignores Hold back
+    volatileIgnore: 10,      // % chance Volatile ignores Hold back
 };
 
 export const fights = {
@@ -134,6 +157,7 @@ export const fights = {
     abyss:    [10, 50, 50, 4, 4],
     raid:     [3, 15, 10, 0.5, 3],
     campaign: [2, 10, 10, 0, 0],
+    duel:     [8, 30, 15, 0, 30],
 };
 
 export const perkList = {
@@ -207,6 +231,8 @@ function fixWarrior(wr){
     if (wr.card === undefined){ wr.card = false; }
     if (wr.ws === undefined){ wr.ws = 0; }
     if (wr.defied === undefined){ wr.defied = 0; }
+    if (wr.hold === undefined){ wr.hold = false; }
+    if (wr.out === undefined){ wr.out = 0; }
     if (!Array.isArray(wr.chron)){ wr.chron = []; }
     if (!wr.rec){ wr.rec = newRecord(wr); }
     battleKinds.forEach(k => { if (!wr.rec.b[k]){ wr.rec.b[k] = [0, 0]; } });
@@ -271,7 +297,7 @@ export function slots(){ return seats(); }
 
 export function active(){
     if (!yokiActive() || !global.race['warriors']){ return []; }
-    return global.race.warriors.roster.filter(x => x.status === 'active');
+    return global.race.warriors.roster.filter(x => x.status === 'active' && !(x.out > 0));
 }
 
 function rand(min, max){ return Math.rand(min, max + 1); } // inclusive
@@ -530,7 +556,7 @@ export function hire(id){
         wr.fee = offer.fee;
         wr.status = 'active'; wr.cd = 0; wr.unpaid = 0;
         wr.fp = false; wr.hd = false; wr.card = false;
-        wr.ws = 0;
+        wr.ws = 0; wr.out = 0; wr.hold = false;
         chron(wr, 'sw_ch_return', [away]);
         messageQueue(loc('sw_returned',[wr.name, rankOf(wr)]),'success',false,['combat']);
     }
@@ -568,6 +594,13 @@ export function toggleFull(id){
     if (!wr || wr.status !== 'active'){ return false; }
     wr.fp = !wr.fp;
     if (wr.fp){ messageQueue(loc('sw_full_on',[wr.name]),'caution',false,['combat']); }
+    return true;
+}
+
+export function toggleHold(id){
+    let wr = findWarrior(id);
+    if (!wr){ return false; }
+    wr.hold = !wr.hold;
     return true;
 }
 
@@ -804,7 +837,15 @@ export function namedBoss(){
 
 export function namedDefeated(){
     let w = warriorState();
-    let b = w.named.shift();
+    return namedRemove(w.named[0]);
+}
+
+// Removes a specific named boss after she is slain.
+export function namedRemove(b){
+    let w = warriorState();
+    let i = w.named.indexOf(b);
+    if (i < 0){ return null; }
+    w.named.splice(i, 1);
     if (b && b.kind === 'wild'){ w.wildSlain++; }
     else if (b){ addHall({ name: b.name, lvl: 0, stats: { str: 0, spd: 0, ctl: 0, sns: 0, wil: 0 } }, b.kind === 'rogue' ? 'slain_rogue' : 'slain_awakened'); }
     return b;
@@ -832,7 +873,10 @@ export function wildInterval(){
 
 export function spawnWild(){
     let w = warriorState();
-    let str = Math.round(rand(wildVars.strMin, wildVars.strMax) * techFactor() * wildVars.strMult);
+    let army = global.civic['garrison'] ? armyRating(garrisonSize(), 'army', global.civic.garrison.wounded || 0) : 0;
+    let eraStr = rand(wildVars.strMin, wildVars.strMax) * techFactor() * wildVars.strMult;
+    let armyStr = army * rand(wildVars.armyMin * 100, wildVars.armyMax * 100) / 100;
+    let str = Math.round(Math.max(wildVars.strFloor, Math.min(eraStr, armyStr)));
     let b = { name: wildName(), str, kind: 'wild' };
     w.named.push(b);
     messageQueue(loc('sw_wild_spawn',[b.name]),'danger',false,['combat']);
@@ -841,6 +885,7 @@ export function spawnWild(){
 
 function wildTick(w){
     if (orgCount() < 1 || !global.tech['military'] || wildCount() >= wildVars.max){ return; }
+    if (!global.civic['garrison'] || global.civic.garrison.workers < wildVars.minSoldiers){ return; }
     if (Math.rand(0, 10000) < 10000 / wildInterval()){
         spawnWild();
     }
@@ -930,6 +975,7 @@ function dailyTick(w){
     // Wages, loyalty, meters
     w.roster.slice().forEach(wr => {
         wr.rec.sd++;
+        if (wr.out > 0){ wr.out--; }
         if (global.resource.Money.amount >= wr.wage){
             global.resource.Money.amount -= wr.wage;
             wr.rec.wg += wr.wage;
@@ -1051,49 +1097,182 @@ export function warriorsBattle(kind, won, info){
                 wr.rec.ak++;
                 chron(wr, 'sw_ch_abyss_blow', [info.killName || '']);
             }
-            if (won && info.target){
-                let t = info.target;
-                if (t === 'generic' || t.kind === 'wild' || t.kind === 'awakened'){ wr.rec.aw++; }
-                if (t !== 'generic'){
-                    wr.rec.ns++;
-                    if (t.kind === 'awakened' || t.kind === 'rogue'){
-                        wr.rec.fs++;
-                        chron(wr, 'sw_ch_slew_sister', [t.name]);
-                    }
-                    else {
-                        chron(wr, 'sw_ch_slew', [t.name]);
-                    }
-                }
-            }
+            if (won && info.target){ creditKill(wr, info.target); }
         });
     }
 
     fighters.forEach(wr => {
         // Death check
-        let death = (won ? f[3] : f[4]) * (1.25 - wr.stats.spd / 200);
-        if (death > 0 && Math.rand(0, 10000) < death * 100){
-            if (Math.rand(0, 100) < defyChance(wr)){
-                wr.meter += warriorVars.defyMeter;
-                wr.defied++;
-                wr.rec.dd++;
-                chron(wr, 'sw_ch_defied');
-                messageQueue(loc('sw_defied',[wr.name]),'special',false,['combat']);
-            }
-            else {
-                removeFromRoster(wr);
-                chron(wr, 'sw_ch_fell');
-                addHall(wr, 'fell');
-                comradeLost(wr);
-                moraleHit(3, wr.id);
-                messageQueue(loc('sw_fell',[wr.name]),'danger',false,['combat']);
-                return;
-            }
-        }
+        if (deathCheck(wr, won ? f[3] : f[4])){ return; }
         wr.meter += f[0] * meterMult(wr);
         changeLoyalty(wr, won ? 1 : -1);
         gainXp(wr, won ? f[1] : f[2]);
         checkMeter(wr);
     });
+}
+
+function creditKill(wr, t){
+    if (t === 'generic' || t.kind === 'wild' || t.kind === 'awakened'){ wr.rec.aw++; }
+    if (t !== 'generic'){
+        wr.rec.ns++;
+        if (t.kind === 'awakened' || t.kind === 'rogue'){
+            wr.rec.fs++;
+            chron(wr, 'sw_ch_slew_sister', [t.name]);
+        }
+        else {
+            chron(wr, 'sw_ch_slew', [t.name]);
+        }
+    }
+}
+
+// Rolls a death chance (%) for her. Returns true if she died.
+function deathCheck(wr, pct){
+    let death = pct * (1.25 - wr.stats.spd / 200);
+    if (death <= 0 || Math.rand(0, 10000) >= death * 100){ return false; }
+    if (Math.rand(0, 100) < defyChance(wr)){
+        wr.meter += warriorVars.defyMeter;
+        wr.defied++;
+        wr.rec.dd++;
+        chron(wr, 'sw_ch_defied');
+        messageQueue(loc('sw_defied',[wr.name]),'special',false,['combat']);
+        return false;
+    }
+    removeFromRoster(wr);
+    chron(wr, 'sw_ch_fell');
+    addHall(wr, 'fell');
+    comradeLost(wr);
+    moraleHit(3, wr.id);
+    messageQueue(loc('sw_fell',[wr.name]),'danger',false,['combat']);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Duels: warriors stepping in when an Awakened One attacks
+// ---------------------------------------------------------------------------
+
+export function duelPower(wr){
+    return might(wr) * techFactor() * (1 + wr.stats.spd / 200) * pw(wr) * duelVars.brink[stageOf(wr)];
+}
+
+export function duelChance(team, str){
+    let p2 = team.reduce((t, wr) => t + Math.pow(duelPower(wr), 2), 0);
+    let c = p2 / (p2 + str * str) * 100;
+    return clamp(c, duelVars.winMin, duelVars.winMax);
+}
+
+function pickWeighted(list, weight){
+    let total = list.reduce((t, x) => t + Math.max(1, weight(x)), 0);
+    let roll = Math.rand(0, 10000) / 10000 * total;
+    for (let x of list){
+        roll -= Math.max(1, weight(x));
+        if (roll <= 0){ return x; }
+    }
+    return list[list.length - 1];
+}
+
+// Who steps in: warriors who notice, the fastest usually first, at most two.
+export function duelTeam(){
+    let noticed = [];
+    active().forEach(wr => {
+        if (Math.rand(0, 10000) >= wr.stats.sns / duelVars.noticeDiv * 100){ return; }
+        let charged = false;
+        if (wr.hold){
+            let ignore = (wr.perks.includes('hot_headed') ? duelVars.hotIgnore : 0) + (wr.temper === 'volatile' ? duelVars.volatileIgnore : 0);
+            if (Math.rand(0, 100) >= ignore){ return; }
+            charged = true;
+        }
+        noticed.push({ wr, charged });
+    });
+    let team = [];
+    while (team.length < duelVars.maxTeam && noticed.length){
+        let x = pickWeighted(noticed, n => n.wr.stats.spd);
+        noticed.splice(noticed.indexOf(x), 1);
+        team.push(x);
+    }
+    return team;
+}
+
+// Called when an Awakened One attacks the garrison.
+// m = { target: named boss or 'generic', str, weaken(mult), quiet(seconds) }, slay() pays and removes it.
+// Returns false (nobody stepped in), 'saved' or 'lost' (the soldier dies anyway).
+export function warriorsIntercept(m, slay){
+    if (!yokiActive()){ return false; }
+    let team = duelTeam();
+    if (!team.length){ return false; }
+    let name = m.target === 'generic' ? loc('sw_duel_generic') : m.target.name;
+    team.forEach(x => {
+        if (x.charged){
+            messageQueue(loc('sw_duel_charged',[x.wr.name]),'warning',false,['combat']);
+            chron(x.wr, 'sw_ch_charged', [name]);
+        }
+    });
+    messageQueue(team.length > 1 ? loc('sw_duel_pair',[team[0].wr.name, team[1].wr.name, name]) : loc('sw_duel_solo',[team[0].wr.name, name]),'info',false,['combat']);
+
+    // Her power surges as the fight begins. A warrior near her limit may cross it here.
+    let f = fights.duel;
+    team.forEach(x => { x.wr.meter += f[0] * meterMult(x.wr); x.wr.rec.pm = Math.max(x.wr.rec.pm, Math.floor(x.wr.meter)); });
+    let crossed = team.filter(x => x.wr.meter >= x.wr.bp).map(x => x.wr);
+    let fighters = team.filter(x => x.wr.meter < x.wr.bp).map(x => x.wr);
+    crossed.forEach(wr => {
+        let partner = fighters[0];
+        if (partner && Math.rand(0, 100) < duelVars.mercyBase + partner.stats.wil / duelVars.mercyWilDiv){
+            let w = warriorState();
+            removeFromRoster(wr);
+            w.woke++;
+            chron(wr, 'sw_ch_mercy_victim', [partner.name]);
+            addHall(wr, 'mercy');
+            comradeLost(wr);
+            moraleHit(2, wr.id);
+            partner.meter += duelVars.mercyMeter;
+            chron(partner, 'sw_ch_mercy', [wr.name]);
+            messageQueue(loc('sw_duel_mercy',[partner.name, wr.name]),'special',false,['combat']);
+            if (checkMeter(partner)){ fighters.splice(fighters.indexOf(partner), 1); }
+        }
+        else {
+            messageQueue(loc('sw_duel_awaken',[wr.name, name]),'danger',false,['combat']);
+            awaken(wr);
+        }
+    });
+    fighters = fighters.filter(wr => !checkMeter(wr));
+    if (!fighters.length){ return 'lost'; }
+
+    let chance = duelChance(fighters, m.str);
+    let roll = Math.rand(0, 10000) / 100;
+    let names = fighters.map(wr => wr.name).join(' & ');
+    if (roll < chance){
+        let blow = pickWeighted(fighters, wr => Math.pow(duelPower(wr), 2));
+        fighters.forEach(wr => {
+            wr.rec.b.duel[0]++;
+            creditKill(wr, m.target);
+            changeLoyalty(wr, 1);
+            gainXp(wr, f[1]);
+        });
+        chron(blow, 'sw_ch_duel_blow', [name]);
+        let bounty = slay();
+        messageQueue(loc('sw_duel_win',[names, name, bounty.toLocaleString()]),'success',false,['combat']);
+        return 'saved';
+    }
+    if (roll < chance + (100 - chance) * duelVars.repelShare){
+        m.weaken(duelVars.repelWeaken);
+        m.quiet(duelVars.repelQuiet);
+        fighters.forEach(wr => {
+            wr.rec.b.duel[0]++;
+            wr.out = duelVars.outDays;
+            gainXp(wr, f[2]);
+            chron(wr, 'sw_ch_duel_repel', [name]);
+        });
+        messageQueue(loc('sw_duel_repel',[names, name, duelVars.outDays]),'warning',false,['combat']);
+        return 'saved';
+    }
+    fighters.forEach(wr => {
+        wr.rec.b.duel[1]++;
+        changeLoyalty(wr, -1);
+        gainXp(wr, f[2]);
+    });
+    messageQueue(loc('sw_duel_lost',[names, name]),'danger',false,['combat']);
+    let victim = pickWeighted(fighters, wr => 200 - wr.stats.spd);
+    deathCheck(victim, f[4]);
+    return 'lost';
 }
 
 // The rewritten Unbroken achievement: first space mission with 3+ warriors, none ever Awakened.
@@ -1209,6 +1388,8 @@ export function drawWarriors(){
                     <span :class="wr.status === 'active' ? 'has-text-success' : 'has-text-caution'">{{ wr.status === 'active' ? '${loc('sw_active')}' : '${loc('sw_resting')}' }}</span>
                     · {{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}
                     <span v-if="wr.fp" class="has-text-danger"> · ${loc('sw_full')}</span>
+                    <span v-if="wr.out > 0" class="has-text-caution"> · ${loc('sw_recovering')} ({{ wr.out }} ${loc('sw_days')})</span>
+                    <span v-if="wr.hold" class="has-text-label"> · ${loc('sw_hold_on')}</span>
                 </div>
                 ${statRow('wr')}
                 <div>${perkChips('wr')}</div>
@@ -1232,6 +1413,7 @@ export function drawWarriors(){
                 <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.3rem;">
                     <button class="button is-small" :disabled="wr.cd > 0" @click="rest(wr.id)">{{ wr.cd > 0 ? wr.cd + 's' : (wr.status === 'active' ? '${loc('sw_rest')}' : '${loc('sw_activate')}') }}</button>
                     <button class="button is-small" :class="wr.fp ? 'is-danger' : ''" :disabled="wr.status !== 'active'" title="${loc('sw_full_tip',[warriorVars.fullBonus, warriorVars.fullMeter])}" @click="full(wr.id)">${loc('sw_full_btn')}</button>
+                    <button class="button is-small" title="${loc('sw_hold_tip')}" @click="hold(wr.id)">{{ wr.hold ? '${loc('sw_stance_intercept')}' : '${loc('sw_stance_hold')}' }}</button>
                     <button class="button is-small" :disabled="!wr.hd && hUsed() >= hCount()" title="${loc('sw_handler_tip',[warriorVars.handlerCut * 100])}" @click="handler(wr.id)">{{ wr.hd ? '${loc('sw_handler_off')}' : '${loc('sw_handler_btn')}' }}</button>
                     <button v-if="tCap() > 0" class="button is-small" :disabled="w.tonic < 1" title="${loc('sw_tonic_tip',[warriorVars.tonicCut])}" @click="tonic(wr.id)">${loc('sw_tonic_btn')}</button>
                     <button class="button is-small" @click="showRecord(wr)">${loc('sw_record')}</button>
@@ -1322,6 +1504,7 @@ export function drawWarriors(){
             rest(id){ toggleRest(id); },
             full(id){ toggleFull(id); },
             handler(id){ toggleHandler(id); },
+            hold(id){ toggleHold(id); },
             tonic(id){ useTonic(id); },
             card(id, c){ blackCard(id, c); },
             showRecord(wr){

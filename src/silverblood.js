@@ -13,11 +13,12 @@ import { armyRating, garrisonSize, soldierDeath } from './civics.js';
 import { messageQueue } from './functions.js';
 import { unlockAchieve, unlockFeat } from './achieve.js';
 import { planetTraits } from './races.js';
-import { warriorsTick, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated, unbrokenCheck, warriorVars, stageOf } from './warriors.js';
+import { warriorsTick, warriorsIntercept, namedRemove, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated, unbrokenCheck, warriorVars, stageOf } from './warriors.js';
 import { drawCity, initStruct, actions } from './actions.js';
 
 export const yokiVars = {
-    rampage: 40,          // ~1 in N chance per second, per Awakened One, to kill a soldier
+    rampage: 40,          // ~1 in N chance per second, per Awakened One, to attack the garrison
+    minSoldiers: 3,       // Awakened Ones never kill your last 3 soldiers
     stressPerBoss: 3,     // morale stress per Awakened One
     hallUpkeep: 1.5,      // Money per second per Silent Hall
 };
@@ -107,16 +108,70 @@ export function yokiTick(){
         unlockAchieve('unbroken');
     }
 
-    let monsters = monsterCount();
-    if (monsters > 0 && global.civic['garrison'] && global.civic.garrison.workers > 0){
-        for (let i = 0; i < monsters; i++){
-            if (Math.rand(0, yokiVars.rampage) === 0){
+    // Awakened Ones attack the garrison. Warriors may step in.
+    let list = monsterList();
+    list.forEach(m => m.tick());
+    if (global.civic['garrison'] && global.civic.garrison.workers > yokiVars.minSoldiers){
+        for (let m of list){
+            if (m.isQuiet() || Math.rand(0, yokiVars.rampage) !== 0){ continue; }
+            let res = m.onCooldown() ? false : warriorsIntercept(m, () => slayMonster(m));
+            if (res){ m.setCooldown(); }
+            if (res !== 'saved'){
                 soldierDeath(1);
                 messageQueue(loc('yoki_rampage'),'danger',false,['combat']);
-                break;
             }
+            if (res === 'saved' && !yokiHuntAvailable()){ drawCity(); }
+            break;
         }
     }
+}
+
+// Every monster at large, with the handles a duel needs.
+// Old generic Awakened Ones share one set of timers on global.race.awakening.
+function monsterList(){
+    let a = yokiState();
+    let list = [];
+    let wrap = (target, holder) => ({
+        target,
+        get str(){ return target === 'generic' ? a.str : target.str; },
+        weaken(mult){
+            if (target === 'generic'){ a.str = Math.max(1, Math.round(a.str * mult)); }
+            else { target.str = Math.max(1, Math.round(target.str * mult)); }
+        },
+        quiet(sec){ holder.quiet = sec; },
+        isQuiet(){ return holder.quiet > 0; },
+        onCooldown(){ return holder.icd > 0; },
+        setCooldown(){ holder.icd = 60; },
+        tick(){
+            if (holder.quiet > 0){ holder.quiet--; }
+            if (holder.icd > 0){ holder.icd--; }
+        }
+    });
+    if (a.boss > 0){ list.push(wrap('generic', a)); }
+    if (global.race['warriors']){ global.race.warriors.named.forEach(b => list.push(wrap(b, b))); }
+    return list;
+}
+
+function payBounty(str){
+    let bounty = Math.round(str * 60 * (global.city.ptrait.includes('infested') ? 2 : 1));
+    global.resource.Money.amount = Math.min(global.resource.Money.max, global.resource.Money.amount + bounty);
+    global.stats['awakened_slain'] = (global.stats['awakened_slain'] || 0) + 1;
+    if (global.stats.awakened_slain >= 50){ unlockAchieve('silver_hunter'); }
+    return bounty;
+}
+
+// A monster slain by warriors in a duel. Returns the bounty.
+function slayMonster(m){
+    let a = yokiState();
+    let bounty = payBounty(m.str);
+    if (m.target === 'generic'){
+        a.boss--;
+        a.str = a.boss > 0 ? newStrength() : 0;
+    }
+    else {
+        namedRemove(m.target);
+    }
+    return bounty;
 }
 
 // Kept for older callers: battles no longer fill a global meter.
@@ -157,10 +212,7 @@ export function yokiHunt(){
         let hurt = Math.min(Math.round(Math.rand(0, Math.ceil(str / 10) + 1) * lossMult), ready - killed);
         soldierDeath(killed);
         global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
-        let bounty = Math.round(str * 60 * (global.city.ptrait.includes('infested') ? 2 : 1));
-        global.resource.Money.amount = Math.min(global.resource.Money.max, global.resource.Money.amount + bounty);
-        global.stats['awakened_slain'] = (global.stats['awakened_slain'] || 0) + 1;
-        if (global.stats.awakened_slain >= 50){ unlockAchieve('silver_hunter'); }
+        let bounty = payBounty(str);
         if (named){
             namedDefeated();
             let key = named.kind === 'rogue' ? 'sw_hunt_rogue_win' : named.kind === 'wild' ? 'sw_hunt_wild_win' : 'sw_hunt_named_win';

@@ -28,6 +28,7 @@ Your garrison soldiers are human. Your real strength, and your real danger, are 
 - Every warrior keeps a **service record** and a chronicle of her notable moments.
 - **Retire** her with severance or **dismiss** her. Veterans who left on good terms may come back. Others may come back for revenge, or Awaken in exile.
 - **Wild Awakened Ones** roam the land and must be hunted with **Hunt the Awakened**.
+- **Duels:** when an Awakened One attacks, a warrior may step in, alone or with a sister. One near her limit fights harder, but may Awaken mid-fight.
 
 **Endgame: the Abyssal Ones**
 After building a fortress in Hell, Silverbloods can hunt five ancient Awakened, each stronger than the last. Every kill makes your army stronger for the rest of the run.

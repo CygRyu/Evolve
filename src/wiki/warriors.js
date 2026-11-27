@@ -3,7 +3,7 @@
 
 import { loc } from './../locale.js';
 import { sideMenu, infoBoxBuilder } from './functions.js';
-import { warriorVars, fights, perkList, temperaments, seatList, wildVars } from './../warriors.js';
+import { warriorVars, fights, perkList, temperaments, seatList, wildVars, duelVars } from './../warriors.js';
 import { yokiVars } from './../silverblood.js';
 
 function table(rows, head){
@@ -136,6 +136,14 @@ export function warriorsPage(content){
     });
     death.append(table(Object.keys(fights).map(k => [loc(`wiki_warriors_fight_${k}`), `${fights[k][3]}%`, `${fights[k][4]}%`]),
         [loc('wiki_warriors_fight'), loc('wiki_warriors_death_win'), loc('wiki_warriors_death_loss')]));
+
+    section(main,'duels',5,{
+        1: [loc('wiki_warriors_sense_half'), duelVars.maxTeam, duelVars.cooldown],
+        2: [`${duelVars.winMin}%`, `${duelVars.winMax}%`, '', `${Math.round((duelVars.brink[2] - 1) * 100)}%`, `${Math.round((duelVars.brink[3] - 1) * 100)}%`],
+        3: [`${duelVars.repelShare * 100}%`, duelVars.outDays, `${fights.duel[4]}%`],
+        4: [fights.duel[0], loc('wiki_warriors_mercy_formula',[duelVars.mercyBase, duelVars.mercyWilDiv]), duelVars.mercyMeter],
+        5: [`${duelVars.hotIgnore}%`, `${duelVars.volatileIgnore}%`],
+    });
 
     section(main,'record',2,{
         2: [warriorVars.chronMax],
