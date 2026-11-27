@@ -1,0 +1,2378 @@
+From 8e8f4babd93853355c9aa338414ca17beda562d0 Mon Sep 17 00:00:00 2001
+From: Evolve Expansion <expansion@example.com>
+Date: Fri, 27 Nov 2026 20:11:47 +0700
+Subject: [PATCH] Silverblood v1.2 part 1: Awakening rework, Seats, records,
+ veterans
+
+Awakening rework
+- Remove the global soldier meter. Only named warriors can Awaken, each
+  at a hidden breaking point (70-130) with escalating warnings
+- Rising floor: rest can't calm her below a share of her limit that
+  grows with level and defied deaths (max 60%)
+- Full Power toggle (bonuses x2, meter x3)
+- Black Card at the brink: honour, save (Tonic or rest, with risk), ignore
+- Handlers are assigned to individual warriors (-40% meter gain);
+  Organizations give a small global calm
+- New buildings: Silent Hall (upkeep, faster rest, lower floor cap) and
+  Apothecary (brews Stillwater Tonic)
+- Wild Awakened Ones with generated names, scaling with era, fame and
+  Monster-infested planets
+- Unbroken: first space mission with 3+ warriors, none ever Awakened
+- Old saves: global meter dropped, legacy Awakened Ones stay huntable
+
+Seats: 8 one-time "Commission a Seat" purchases gated by milestones.
+Service record and chronicle per warrior, kept in the Hall.
+Retire with severance, dismiss, parting mood, veterans who return,
+and Awakening in exile.
+
+Wiki Warriors page, structures notes, changelog, README, MODDING and
+TESTING updated.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016HmsZPiTBCQAJJigd9ht6e
+---
+ MODDING.md             |   7 +-
+ README.md              |  18 +-
+ TESTING.md             |  86 ++--
+ src/actions.js         |  68 ++-
+ src/main.js            |   3 +-
+ src/silverblood.js     | 169 ++++----
+ src/warriors.js        | 911 +++++++++++++++++++++++++++++++++++++----
+ src/wiki/change.js     |  15 +
+ src/wiki/structures.js |   2 +
+ src/wiki/warriors.js   |  69 +++-
+ strings/strings.json   | 234 +++++++++--
+ 11 files changed, 1321 insertions(+), 261 deletions(-)
+
+diff --git a/MODDING.md b/MODDING.md
+index cf1a4c95..724cad26 100644
+--- a/MODDING.md
++++ b/MODDING.md
+@@ -66,8 +66,7 @@ Next steps could be custom traits (effects scripted from a whitelist of hooks),
+ This content is built into the game, not part of a mod pack. The code is in `src/silverblood.js`, with small hooks in other files.
+ 
+ - **Race:** Silverblood (humanoid). Traits: Demon Power, Outcast, and half-rank Regenerative. It can be picked on the evolution screen from the first run, once you take the humanoid path.
+-- **Awakening meter**, shown beside Morale. Healthy soldiers fill it slowly, wounded soldiers faster, and each offensive campaign adds 4%. At 100% a warrior becomes an **Awakened One** and the meter drops to 25%. At most 3 can be loose at once.
+-- Each Awakened One sometimes kills a soldier and adds 3 stress.
++- **Awakening:** only named warriors (`src/warriors.js`) can Awaken, each at her own hidden breaking point. An Awakened warrior, a warrior with a grudge, or a wild Awakened One kills soldiers now and then and adds 3 stress until hunted.
+ - **Hunt the Awakened** (Military Complex): your army rating, with some luck, is compared to the monster's strength. A win kills the monster and pays a bounty. A loss costs soldiers but weakens the monster by 20%.
+-- **The Organization** (Military Complex): lowers the meter by 0.03% per second and adds one **Handler** job slot. Each Handler lowers it by a further 0.06% per second.
+-- Tuning numbers are in `yokiVars` at the top of `src/silverblood.js`.
++- **The Organization**, **Silent Hall** and **Apothecary** (Military Complex), and the **Handler** job, keep warriors stable.
++- Tuning numbers are in `warriorVars`, `seatList` and `wildVars` at the top of `src/warriors.js`, and `yokiVars` in `src/silverblood.js`.
+diff --git a/README.md b/README.md
+index 1277f1f6..8503ef8a 100644
+--- a/README.md
++++ b/README.md
+@@ -13,23 +13,21 @@ https://cygryu.github.io/Evolve/
+ **Silverblood, a new race**
+ Humans infused with demon flesh: elite warriors who are slowly becoming the monsters they hunt. Silverblood is a humanoid race and can be picked on the evolution screen from your very first run.
+ 
+-- **Demon Power:** +25% combat rating, but your soldiers build up the Awakening meter.
++- **Demon Power:** +25% combat rating, but your warriors can Awaken.
+ - **Outcast:** your citizens fear the warriors who protect them, so the army causes more stress.
+ 
+-**The Awakening meter**
+-- Shown beside Morale. Soldiers fill it slowly, wounded soldiers faster, and every battle adds to it.
+-- At 100%, a warrior Awakens into a monster that kills soldiers and adds stress until you hunt it down with **Hunt the Awakened**.
+-- **The Organization** (a new building) and **Handlers** (a new job) hold the meter back.
+-
+ **Warriors of the Organization**
+-Recruit up to 8 named elite warriors, one slot per Organization, in the Civics, Military tab. It works like Battle Brothers:
++Your garrison soldiers are human. Your real strength, and your real danger, are up to 8 named elite warriors in the Civics, Military tab. It works like Battle Brothers:
+ 
+ - Every recruit is randomly generated, with five stats (Strength, Speed, Control, Sense, Will), perks and flaws, and a temperament.
+ - Hiring costs a fee, and every warrior is paid a wage each day. If you can't pay, loyalty drops, and unhappy warriors may desert.
+ - Warriors level up from battles, Fire Emblem style: each stat has its own hidden chance to grow on every level up.
+-- Each warrior has her own Awakening meter. Resting her lowers it, but she gives no bonuses while resting and still gets paid.
+-- Warriors can die in battle, with a 5% to 25% chance to defy death.
+-- A warrior who Awakens, deserts or retires unhappy may come back as a named enemy.
++- **Seats:** you start with one, and commission more as your civilization reaches new milestones.
++- **Awakening:** each warrior has her own meter and a hidden breaking point. She warns you as she nears it, and on the brink she sends you her **Black Card**: honour it, try to save her, or ignore it.
++- Rest, **Handlers**, the **Silent Hall** and **Stillwater Tonic** from the **Apothecary** keep warriors stable. **Full Power** doubles a warrior's bonuses, at a steep cost.
++- Every warrior keeps a **service record** and a chronicle of her notable moments.
++- **Retire** her with severance or **dismiss** her. Veterans who left on good terms may come back. Others may come back for revenge, or Awaken in exile.
++- **Wild Awakened Ones** roam the land and must be hunted with **Hunt the Awakened**.
+ 
+ **Endgame: the Abyssal Ones**
+ After building a fortress in Hell, Silverbloods can hunt five ancient Awakened, each stronger than the last. Every kill makes your army stronger for the rest of the run.
+diff --git a/TESTING.md b/TESTING.md
+index e8c7f9b5..d5add77b 100644
+--- a/TESTING.md
++++ b/TESTING.md
+@@ -13,29 +13,39 @@ Notes:
+ 
+ ## 2. Early military (first barracks)
+ - [ ] After researching military, **The Organization** appears in the Military Complex.
+-- [ ] The **Awakening** meter appears beside Morale, and hovering over it shows the rates.
+-- [ ] The meter rises slowly with soldiers. Write down how long it takes to reach 100%: ______
+-- [ ] Building an Organization unlocks the **Handler** job in Civics.
+-- [ ] Assigning Handlers visibly slows or reverses the meter.
++- [ ] There is **no** Awakening meter beside Morale any more. The header only shows "Awakened: N" when monsters are loose, or "A warrior is strained".
++- [ ] Building an Organization unlocks the **Handler** job and opens **Seat 1** in Civics, Military, with 3 recruits.
+ - [ ] Morale: Outcast makes the army stressful, but it's still manageable.
+ 
+ Notes:
+ 
+-## 3. First Awakening
+-- [ ] At 100%, a red message says a warrior Awakened, and the meter drops to 25%.
+-- [ ] The header shows the count, for example "Awakening 25% (1)".
+-- [ ] **Hunt the Awakened** appears in the Military Complex.
+-- [ ] While the monster is loose, a soldier is killed now and then, and stress rises.
+-- [ ] A successful hunt pays a bounty, and the button disappears when no monsters are left.
+-- [ ] A failed hunt costs soldiers, and the next attempt is easier.
+-- [ ] Is hunting worth it, or is it better to leave monsters alone? (It shouldn't be better to leave them.)
++## 3. Seats
++- [ ] The panel shows the next Seat, its milestone (green when met) and its cost.
++- [ ] Commission Seats 2 to 8 as you reach Iron Mining, a Silent Hall, Boot Camp, an Apothecary, Electricity, Industrialization and the first space mission. Write down when each felt affordable: 2 ___ 3 ___ 4 ___ 5 ___ 6 ___ 7 ___ 8 ___
++- [ ] A message appears for each Seat.
+ 
+ Notes:
+ 
+-## 4. Campaigns and mid-game
+-- [ ] Each offensive campaign (Civics → Military) visibly raises the meter, by about 4%.
+-- [ ] With 2 to 4 Organizations and a few Handlers, you can keep the meter under control.
+-- [ ] Can you avoid all Awakenings until your first space mission? (That's the **Unbroken** achievement.) Too easy, too hard, or about right?
++## 4. Awakening, warnings and the Black Card
++- [ ] An active warrior's meter rises slowly every day and after each battle. Write down how long a fresh warrior lasts active without rest: ______
++- [ ] Warnings appear in order: "eyes flicker gold", "strained", then the **Black Card** on her panel.
++- [ ] Honour it: she dies with honour, no monster, and her sisters gain loyalty. She is in the Hall as "died with honour".
++- [ ] Save with Tonic and Save with Rest both work, and sometimes fail.
++- [ ] Ignore it: her sisters lose loyalty. If she reaches her limit she Awakens and appears in Hunt the Awakened with "Formerly No. X, served N days".
++- [ ] After a few levels and a defied death, resting stops lowering her meter at some point ("can't calm further").
++- [ ] **Full Power:** her bonuses double (check the "Elite Warriors" line in combat rating), and her meter climbs much faster.
++- [ ] **Handlers:** assign one to a warrior. You can't assign more than you have employed. Firing Handlers removes assignments.
++- [ ] **Silent Hall:** money upkeep shows in the Money breakdown. Resting warriors calm faster.
++- [ ] **Apothecary:** tonics build up slowly. A tonic lowers a warrior's meter by 40.
++- [ ] Target from the design: a careful player loses about one warrior every few hours, mostly to the Black Card. Too harsh, too soft, or about right?
++
++Notes:
++
++## 4b. Wild Awakened Ones
++- [ ] After the first Organization, wild Awakened Ones with generated names appear now and then (about every 30 minutes early on).
++- [ ] Each one sometimes kills a soldier and adds stress until hunted. At most 3 at once.
++- [ ] They appear more often later, on Monster-infested planets, and as your warriors level up.
++- [ ] Can you avoid all warrior Awakenings until your first space mission, with at least 3 warriors? (That's **Unbroken**.)
+ 
+ Notes:
+ 
+@@ -45,7 +55,7 @@ This trait is random. To find one, check the planet traits when choosing a plane
+ - [ ] Combat rating shows a +5% "Monster-infested" line in its breakdown.
+ - [ ] After researching military, demon raids happen roughly every 10 minutes.
+ - [ ] Winning a raid wounds a few soldiers and pays money. Losing a raid kills soldiers and steals food and money.
+-- [ ] As Silverblood, raids add to the Awakening meter, and Awakened bounties are doubled.
++- [ ] As Silverblood, warriors fight in raids, and Awakened bounties are doubled.
+ 
+ Notes:
+ 
+@@ -59,16 +69,18 @@ Notes:
+ 
+ Notes:
+ 
+-## 7. Warriors of the Organization
+-- [ ] After the first Organization, the **Warriors of the Organization** panel appears in Civics, Military, with 3 recruits.
+-- [ ] Hiring takes the fee, and the roster limit equals the number of Organizations (up to 8).
++## 7. Warriors: records and leaving
++- [ ] Hiring takes the fee, and the roster limit equals your Seats.
+ - [ ] Each day the wages are paid. With no money, a warning appears and loyalty drops.
+-- [ ] Rest a warrior: her bonus disappears from combat rating ("Elite Warriors" line), her meter goes down, and the button is locked for 2 minutes.
++- [ ] Rest a warrior: her bonus disappears from combat rating, her meter goes down, and the button is locked for 2 minutes.
++- [ ] Hover over a warrior's name for a summary. Tap her name or **Record** for the full record and chronicle (try this on a phone too).
++- [ ] **Retire:** the confirmation shows severance, back pay and how she would leave. The money is taken.
++- [ ] **Dismiss:** free, but the others lose loyalty.
++- [ ] She appears under **Veterans** and in the Hall with her record.
++- [ ] After 30 days or more, a Grateful or Neutral veteran sometimes shows up as a "Former warrior" recruit (Grateful at half fee), with her old level and record.
++- [ ] Retire a warrior while she is strained: she may Awaken later in exile, with a message.
++- [ ] Bitter veterans and deserters sometimes come back as enemies.
+ - [ ] Rename works and survives a page reload.
+-- [ ] After a few hunts, warriors level up, and a message lists which stats grew.
+-- [ ] Watch for a death, a "refused to fall" (defied death) message, and an Awakened warrior who then shows up as a named target in Hunt the Awakened.
+-- [ ] Retire an unhappy warrior and see whether she comes back later.
+-- [ ] Is the wage fair? Early on, it should be noticeable but affordable. Note it late game too.
+ 
+ Notes:
+ 
+@@ -81,22 +93,30 @@ Notes:
+ 
+ ## 9. Saves
+ - [ ] Export a save from the original game and import it here. It loads without errors.
+-- [ ] Reload the page mid-run. The meter, Awakened Ones and Abyssal progress are all kept.
++- [ ] Reload the page mid-run. Warriors, Seats, veterans, Awakened Ones and Abyssal progress are all kept.
++- [ ] Load a save from before v1.2 with warriors and Awakened Ones loose: you keep at least as many Seats as warriors, and the old Awakened Ones can still be hunted.
+ 
+ Notes:
+ 
+ ## Balance knobs
+ 
+-If something feels wrong, these are the numbers to change. All of them are in `src/silverblood.js`:
++If something feels wrong, these are the numbers to change. Most are in `src/warriors.js` and `src/silverblood.js`:
+ 
+ | What | Setting | Default |
+ |---|---|---|
+-| Meter fill per healthy soldier | `yokiVars.soldierGain` | 0.004% per second |
+-| Extra fill per wounded soldier | `yokiVars.woundGain` | 0.012% per second |
+-| Meter added per campaign | `yokiVars.battleGain` | 4% |
+-| Organization calming | `yokiVars.orgCalm` | 0.03% per second |
+-| Handler calming | `yokiVars.handlerCalm` | 0.06% per second |
+-| Rampage chance | `yokiVars.rampage` | about 1 in 40 per second |
++| Seat costs | `seatList` in `src/warriors.js` | $2K + 500 Iron, up to $300K + 40K Steel + 12K Titanium |
++| Warrior meter per active day | `warriorVars.activeGain` | 0.12 (before Control) |
++| Breaking point range | `warriorVars.breakMin/breakMax` | 70 to 130 (average of two rolls) |
++| Warning thresholds | `warriorVars.warn` | 60%, 80%, 92% of her limit |
++| Rising floor | `warriorVars.floorLevel/floorDefy/floorCap` | 1.5% per level, 6% per defied death, max 60% |
++| Full Power | `warriorVars.fullBonus/fullMeter` | bonuses x2, meter x3 |
++| Handler / Organization calm | `warriorVars.handlerCut/orgCalm` | -40% for her / -2% each (max 20%) |
++| Silent Hall | `warriorVars.hallRest/floorHallCut`, `yokiVars.hallUpkeep` | +30% rest, -4% floor cap, $1.5/s |
++| Stillwater Tonic | `warriorVars.tonicDays/tonicCut` | 1 per 60 days per Apothecary, -40 meter |
++| Black Card risks | `warriorVars.tonicFail/restSaveRisk` | 15% / 12% |
++| Wild Awakened frequency | `wildVars.era` | 360, 240, 160, 120 days by era |
++| Severance | `warriorVars.sevBase/sevDiv` | wage x (10 + days served / 10) |
++| Rampage chance | `yokiVars.rampage` in `src/silverblood.js` | about 1 in 40 per second |
+ | Abyssal health | `abyssVars.hp` | 4k, 9k, 18k, 36k, 75k |
+ | Abyssal soldier losses | `abyssVars.fury` | 4% to 9% at risk per expedition |
+ | Time between raids | `planetTraits.infested` in `src/races.js` | 600 seconds |
+diff --git a/src/actions.js b/src/actions.js
+index eab70e1c..c07aaa2e 100644
+--- a/src/actions.js
++++ b/src/actions.js
+@@ -18,7 +18,7 @@ import { defineGovernor, govActive, removeTask, gov_tasks } from './governor.js'
+ import { bioseed } from './resets.js';
+ import { loadTab } from './index.js';
+ import { modRaceKeys } from './mods.js';
+-import { yokiState, yokiRates, yokiHunt, yokiHuntEffect, yokiVars, abyssAvailable, abyssTitle, abyssEffect, abyssHunt, yokiHuntAvailable } from './silverblood.js';
++import { yokiHunt, yokiHuntEffect, abyssAvailable, abyssTitle, abyssEffect, abyssHunt, yokiHuntAvailable, organizationEffect, silentHallEffect, apothecaryEffect } from './silverblood.js';
+ 
+ export const actions = {
+     evolution: {
+@@ -2034,11 +2034,7 @@ export const actions = {
+                 Furs(offset){ return costMultiplier('organization', offset, 40, 1.32); }
+             },
+             effect(args){
+-                let desc = `<div>${loc('city_organization_effect',[yokiVars.orgCalm])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div>`;
+-                if (args && args.isWiki){ return desc; }
+-                let a = yokiState();
+-                let r = yokiRates();
+-                return desc + `<div class="has-text-caution">${loc('city_organization_effect2',[Math.floor(a.m), (r.net >= 0 ? '+' : '') + r.net.toFixed(2)])}</div>`;
++                return organizationEffect();
+             },
+             action(args){
+                 if (payCosts($(this)[0])){
+@@ -2057,6 +2053,66 @@ export const actions = {
+                 };
+             }
+         },
++        silent_hall: { // Expansion: Silverblood
++            id: 'city-silent_hall',
++            title: loc('city_silent_hall'),
++            desc: loc('city_silent_hall_desc'),
++            category: 'military',
++            reqs: { military: 1, mining: 3 },
++            trait: ['yoki_power'],
++            not_trait: ['cataclysm','lone_survivor'],
++            cost: {
++                Money(offset){ return costMultiplier('silent_hall', offset, 900, 1.35); },
++                Stone(offset){ return costMultiplier('silent_hall', offset, 600, 1.35); },
++                Furs(offset){ return costMultiplier('silent_hall', offset, 120, 1.35); }
++            },
++            effect(args){
++                return silentHallEffect(args && args.isWiki);
++            },
++            action(args){
++                if (payCosts($(this)[0])){
++                    incrementStruct('silent_hall','city');
++                    return true;
++                }
++                return false;
++            },
++            struct(){
++                return {
++                    d: { count: 0 },
++                    p: ['silent_hall','city']
++                };
++            }
++        },
++        apothecary: { // Expansion: Silverblood
++            id: 'city-apothecary',
++            title: loc('city_apothecary'),
++            desc: loc('city_apothecary_desc'),
++            category: 'military',
++            reqs: { military: 1, high_tech: 1, smelting: 2 },
++            trait: ['yoki_power'],
++            not_trait: ['cataclysm','lone_survivor'],
++            cost: {
++                Money(offset){ return costMultiplier('apothecary', offset, 6000, 1.3); },
++                Cement(offset){ return costMultiplier('apothecary', offset, 1500, 1.3); },
++                Furs(offset){ return costMultiplier('apothecary', offset, 800, 1.3); }
++            },
++            effect(args){
++                return apothecaryEffect(args && args.isWiki);
++            },
++            action(args){
++                if (payCosts($(this)[0])){
++                    incrementStruct('apothecary','city');
++                    return true;
++                }
++                return false;
++            },
++            struct(){
++                return {
++                    d: { count: 0 },
++                    p: ['apothecary','city']
++                };
++            }
++        },
+         hunt_awakened: { // Expansion: Silverblood
+             id: 'city-hunt_awakened',
+             title: loc('city_hunt_awakened'),
+diff --git a/src/main.js b/src/main.js
+index ee45bcd9..3527512d 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -14,7 +14,7 @@ import { asphodelResist, mechStationEffect, renderEdenic } from './edenic.js';
+ import { renderTauCeti, syndicate, shipFuelUse, spacePlanetStats, genXYcoord, shipCrewSize, tpStorageMultiplier, tritonWar, sensorRange, erisWar, calcAIDrift, drawMap, tauEnabled, shipCosts, buildTPShipQueue } from './truepath.js';
+ import { arpa, buildArpa, sequenceLabs } from './arpa.js';
+ import { events, eventList } from './events.js';
+-import { yokiTick, yokiStress, yokiStressCut, awakeningLabel, awakeningTooltip, infestedTick } from './silverblood.js';
++import { yokiTick, yokiStress, yokiStressCut, awakeningLabel, awakeningTooltip, infestedTick, silentHallUpkeep } from './silverblood.js';
+ import { defineGovernor, govern, govActive, removeTask } from './governor.js';
+ import { production, highPopAdjust, teamster, factoryBonus } from './prod.js';
+ import { swissKnife } from './tech.js';
+@@ -1531,6 +1531,7 @@ function fastLoop(){
+             stress -= army_stress;
+         }
+ 
++        silentHallUpkeep(breakdown, time_multiplier); // Expansion
+         breakdown.p.consume.Money[loc('trade')] = 0;
+ 
+         // trade routes
+diff --git a/src/silverblood.js b/src/silverblood.js
+index d0876cd3..95c39fd5 100644
+--- a/src/silverblood.js
++++ b/src/silverblood.js
+@@ -1,31 +1,25 @@
+ // Expansion: Silverblood race mechanics.
+ //
+-// Awakening meter: soldiers with Demon Power (yoki_power) slowly build up
+-// Awakening. The Organization building and Handler job hold it back.
+-// At 100% a warrior Awakens and becomes a monster that must be hunted.
++// Only named warriors (src/warriors.js) can Awaken. Garrison soldiers are
++// human. Awakened Ones at large (your own fallen warriors, grudge-holders
++// and wild Awakened) kill soldiers and add stress until they are hunted.
+ //
+-// State lives in global.race.awakening = { m, boss, str, rate, hunts }.
++// State lives in global.race.awakening = { boss, str, hunts, abyss }.
++// boss/str are legacy generic Awakened Ones from saves made before v1.2.
+ 
+ import { global } from './vars.js';
+ import { loc } from './locale.js';
+-import { traits } from './races.js';
+ import { armyRating, garrisonSize, soldierDeath } from './civics.js';
+ import { messageQueue } from './functions.js';
+ import { unlockAchieve, unlockFeat } from './achieve.js';
+ import { planetTraits } from './races.js';
+-import { warriorsTick, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated } from './warriors.js';
++import { warriorsTick, warriorsBattle, warriorsHuntMult, warriorsLossMult, warriorsCdMult, warriorsStressCut, warriorsStressAdd, namedBoss, namedDefeated, unbrokenCheck, warriorVars, stageOf } from './warriors.js';
+ import { drawCity, initStruct, actions } from './actions.js';
+ 
+ export const yokiVars = {
+-    soldierGain: 0.004,   // meter %/s per healthy soldier
+-    woundGain: 0.012,     // extra meter %/s per wounded soldier
+-    battleGain: 4,        // meter % per offensive campaign
+-    orgCalm: 0.03,        // meter %/s removed per Organization
+-    handlerCalm: 0.06,    // meter %/s removed per Handler
+-    resetTo: 25,          // meter after an Awakening
+-    maxBoss: 3,           // most Awakened Ones alive at once
+     rampage: 40,          // ~1 in N chance per second, per Awakened One, to kill a soldier
+     stressPerBoss: 3,     // morale stress per Awakened One
++    hallUpkeep: 1.5,      // Money per second per Silent Hall
+ };
+ 
+ export function yokiActive(){
+@@ -34,11 +28,14 @@ export function yokiActive(){
+ 
+ export function yokiState(){
+     if (!global.race['awakening']){
+-        global.race['awakening'] = { m: 0, boss: 0, str: 0, rate: 0, hunts: 0 };
++        global.race['awakening'] = { boss: 0, str: 0, hunts: 0 };
+     }
+     let a = global.race.awakening;
+-    if (a.woke === undefined){ a.woke = 0; }   // Awakenings this run
++    if (a.boss === undefined){ a.boss = 0; }
++    if (a.str === undefined){ a.str = 0; }
++    if (a.hunts === undefined){ a.hunts = 0; }
+     if (!a.abyss){ a.abyss = { slain: 0, hp: 0, cd: 0 }; }
++    ['m','rate','woke'].forEach(k => { if (a[k] !== undefined){ delete a[k]; } }); // old global meter
+     return a;
+ }
+ 
+@@ -50,48 +47,67 @@ function newStrength(){
+     return Math.rand(30, 61) * techFactor();
+ }
+ 
+-function orgCount(){
+-    return global.city['organization'] ? global.city.organization.count : 0;
++function monsterCount(){
++    return yokiState().boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
+ }
+ 
+-function handlers(){
+-    return global.civic['handler'] ? global.civic.handler.workers : 0;
++// ---------------------------------------------------------------------------
++// Silent Hall upkeep (from the fast loop, 4 times a second)
++// ---------------------------------------------------------------------------
++
++let funded = 0;
++
++export function hallsFunded(){
++    return funded;
++}
++
++export function silentHallUpkeep(breakdown, time_multiplier){
++    if (!yokiActive() || !global.city['silent_hall'] || !global.city.silent_hall.count){
++        funded = 0;
++        return;
++    }
++    let count = global.city.silent_hall.count;
++    let per = yokiVars.hallUpkeep * time_multiplier;
++    let on = Math.min(count, Math.floor(global.resource.Money.amount / per));
++    funded = on;
++    if (on > 0){
++        global.resource.Money.amount -= on * per;
++        breakdown.p.consume.Money[loc('city_silent_hall')] = -(on * yokiVars.hallUpkeep);
++    }
+ }
+ 
+-// Per-second rates, also used for tooltips.
+-export function yokiRates(){
+-    let gain = 0;
+-    if (global.civic['garrison']){
+-        let mult = traits.yoki_power.vars()[1] / 100 * (1 - yokiState().abyss.slain * abyssVars.calmReward);
+-        let wounded = global.civic.garrison.wounded || 0;
+-        let healthy = Math.max(0, garrisonSize() - wounded);
+-        gain = (healthy * yokiVars.soldierGain + wounded * yokiVars.woundGain) * mult;
++export function silentHallEffect(isWiki){
++    let desc = `<div>${loc('city_silent_hall_effect',[warriorVars.hallRest * 100, warriorVars.hallRestMax * 100])}</div>`;
++    desc += `<div>${loc('city_silent_hall_effect2',[warriorVars.floorHallCut * 100, warriorVars.floorCapMin * 100])}</div>`;
++    desc += `<div class="has-text-caution">${loc('city_silent_hall_upkeep',[yokiVars.hallUpkeep])}</div>`;
++    if (!isWiki && global.city['silent_hall'] && global.city.silent_hall.count > funded){
++        desc += `<div class="has-text-danger">${loc('city_silent_hall_unfunded',[global.city.silent_hall.count - funded])}</div>`;
+     }
+-    let calm = orgCount() * yokiVars.orgCalm + handlers() * yokiVars.handlerCalm;
+-    return { gain, calm, net: gain - calm };
++    return desc;
++}
++
++export function apothecaryEffect(isWiki){
++    return `<div>${loc('city_apothecary_effect',[warriorVars.tonicDays, warriorVars.tonicCut])}</div><div>${loc('city_apothecary_effect2')}</div>`;
++}
++
++export function organizationEffect(){
++    return `<div>${loc('city_organization_effect',[warriorVars.orgCalm * 100, warriorVars.orgCalmMax * 100])}</div><div>${loc('plus_max_resource',[1,loc('job_handler')])}</div>`;
+ }
+ 
+ // Called once per game second from midLoop.
+ export function yokiTick(){
+     if (!yokiActive()){ return; }
+     let a = yokiState();
+-    if (!global.city['organization']){
+-        initStruct(actions.city.organization);
+-    }
+-    let r = yokiRates();
+-    a.rate = r.net;
+-    a.m = Math.min(100, Math.max(0, a.m + r.net));
+-
+-    if (a.m >= 100){
+-        awaken(a);
+-    }
++    ['organization','silent_hall','apothecary'].forEach(b => {
++        if (!global.city[b]){ initStruct(actions.city[b]); }
++    });
+     if (a.abyss.cd > 0){ a.abyss.cd--; }
+     warriorsTick();
+-    if (a.woke === 0 && global.tech['space'] && global.tech.space >= 2){
++    if (global.tech['space'] && global.tech.space >= 2 && unbrokenCheck()){
+         unlockAchieve('unbroken');
+     }
+ 
+-    let monsters = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
++    let monsters = monsterCount();
+     if (monsters > 0 && global.civic['garrison'] && global.civic.garrison.workers > 0){
+         for (let i = 0; i < monsters; i++){
+             if (Math.rand(0, yokiVars.rampage) === 0){
+@@ -103,34 +119,12 @@ export function yokiTick(){
+     }
+ }
+ 
+-function awaken(a){
+-    a.m = yokiVars.resetTo;
+-    a.woke++;
+-    if (a.boss >= yokiVars.maxBoss){
+-        // Already overrun: the new monster takes soldiers with it instead.
+-        let killed = Math.min(Math.rand(2, 6), global.civic.garrison.workers);
+-        soldierDeath(killed);
+-        messageQueue(loc('yoki_awaken_overrun',[killed]),'danger',false,['combat']);
+-        return;
+-    }
+-    let wasZero = a.boss === 0;
+-    a.boss++;
+-    a.str = Math.max(a.str, newStrength());
+-    messageQueue(loc('yoki_awaken',[a.boss]),'danger',false,['combat']);
+-    if (wasZero){ drawCity(); }
+-}
+-
+-// Battles push warriors closer to the edge.
+-export function yokiBattle(){
+-    if (!yokiActive()){ return; }
+-    let a = yokiState();
+-    a.m = Math.min(100, a.m + yokiVars.battleGain);
+-}
++// Kept for older callers: battles no longer fill a global meter.
++export function yokiBattle(){}
+ 
+ export function yokiStress(){
+     if (!yokiActive()){ return 0; }
+-    let named = global.race['warriors'] ? global.race.warriors.named.length : 0;
+-    return (yokiState().boss + named) * yokiVars.stressPerBoss + warriorsStressAdd();
++    return monsterCount() * yokiVars.stressPerBoss + warriorsStressAdd();
+ }
+ 
+ export function yokiStressCut(){
+@@ -139,10 +133,10 @@ export function yokiStressCut(){
+ }
+ 
+ export function yokiHuntAvailable(){
+-    return yokiActive() && (yokiState().boss > 0 || namedBoss() !== null);
++    return yokiActive() && monsterCount() > 0;
+ }
+ 
+-// The "Hunt the Awakened" action. Named bosses (your own fallen warriors) come first.
++// The "Hunt the Awakened" action. Named targets come first, then old generic ones.
+ export function yokiHunt(){
+     let a = yokiState();
+     let named = namedBoss();
+@@ -169,14 +163,15 @@ export function yokiHunt(){
+         if (global.stats.awakened_slain >= 50){ unlockAchieve('silver_hunter'); }
+         if (named){
+             namedDefeated();
+-            messageQueue(loc(named.kind === 'rogue' ? 'sw_hunt_rogue_win' : 'sw_hunt_named_win',[named.name, killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
++            let key = named.kind === 'rogue' ? 'sw_hunt_rogue_win' : named.kind === 'wild' ? 'sw_hunt_wild_win' : 'sw_hunt_named_win';
++            messageQueue(loc(key,[named.name, killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
+         }
+         else {
+             a.boss--;
+             a.str = a.boss > 0 ? newStrength() : 0;
+             messageQueue(loc('yoki_hunt_win',[killed, hurt, bounty.toLocaleString()]),'success',false,['combat']);
+         }
+-        warriorsBattle('hunt', true);
++        warriorsBattle('hunt', true, { target: named || 'generic' });
+         if (!yokiHuntAvailable()){ drawCity(); }
+     }
+     else {
+@@ -188,7 +183,7 @@ export function yokiHunt(){
+         if (named){ named.str = Math.max(1, Math.round(named.str * 0.8)); }
+         else { a.str = Math.max(1, Math.round(a.str * 0.8)); }
+         messageQueue(loc('yoki_hunt_loss',[killed, hurt]),'danger',false,['combat']);
+-        warriorsBattle('hunt', false);
++        warriorsBattle('hunt', false, { target: named || 'generic' });
+     }
+     return false;
+ }
+@@ -197,29 +192,29 @@ export function yokiHuntEffect(){
+     let a = yokiState();
+     let named = namedBoss();
+     let army = global.civic['garrison'] ? Math.round(armyRating(garrisonSize(), 'army', global.civic.garrison.wounded) * warriorsHuntMult()) : 0;
+-    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
+-    let desc = `<div>${loc('city_hunt_awakened_effect',[total])}</div>`;
+-    if (named){ desc += `<div class="has-text-danger">${loc(named.kind === 'rogue' ? 'sw_hunt_target_rogue' : 'sw_hunt_target_named',[named.name])}</div>`; }
++    let desc = `<div>${loc('city_hunt_awakened_effect',[monsterCount()])}</div>`;
++    if (named){
++        let key = named.kind === 'rogue' ? 'sw_hunt_target_rogue' : named.kind === 'wild' ? 'sw_hunt_target_wild' : 'sw_hunt_target_named';
++        desc += `<div class="has-text-danger">${loc(key,[named.name])}</div>`;
++        if (named.former){ desc += `<div class="has-text-label">${loc('sw_hunt_former',[named.former.r, named.former.sd])}</div>`; }
++    }
+     return desc + `<div class="has-text-caution">${loc('city_hunt_awakened_effect2',[Math.round(named ? named.str : a.str), army])}</div>`;
+ }
+ 
+-// Text for the race header.
++// Text for the race header: Awakened Ones at large, or a warrior near her limit.
+ export function awakeningLabel(){
+     if (!yokiActive()){ return ''; }
+-    let a = yokiState();
+-    let label = `${loc('yoki_meter')} ${Math.floor(a.m)}%`;
+-    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
+-    if (total > 0){ label += ` (${total})`; }
+-    return label;
++    let total = monsterCount();
++    if (total > 0){ return loc('yoki_label_monsters',[total]); }
++    let w = global.race['warriors'];
++    if (w && w.roster.some(wr => wr.bp && stageOf(wr) >= 2)){ return loc('yoki_label_strained'); }
++    return '';
+ }
+ 
+ export function awakeningTooltip(){
+     if (!yokiActive()){ return ''; }
+-    let r = yokiRates();
+-    let fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2);
+-    let tip = loc('yoki_meter_tooltip',[fmt(r.gain), fmt(-r.calm), fmt(r.net)]);
+-    let a = yokiState();
+-    let total = a.boss + (global.race['warriors'] ? global.race.warriors.named.length : 0);
++    let tip = loc('yoki_label_tooltip');
++    let total = monsterCount();
+     if (total > 0){ tip += ' ' + loc('yoki_boss_count',[total]); }
+     return tip;
+ }
+@@ -242,7 +237,6 @@ export function demonRaid(){
+     let ready = Math.max(0, garrisonSize() - wounded);
+     let strength = Math.rand(10, 41) * techFactor();
+     let army = ready > 0 ? armyRating(garrisonSize(), 'army', wounded) * Math.rand(8, 13) / 10 : 0;
+-    yokiBattle();
+     if (army >= strength){
+         let hurt = Math.min(Math.rand(0, Math.ceil(strength / 15) + 1), ready);
+         global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
+@@ -338,8 +332,7 @@ export function abyssHunt(){
+     global.civic.garrison.wounded = Math.min(wounded + hurt, global.civic.garrison.workers);
+     ab.hp -= dmg;
+     ab.cd = Math.round(abyssVars.cooldown * warriorsCdMult());
+-    yokiBattle();
+-    warriorsBattle('abyss', ab.hp <= 0);
++    warriorsBattle('abyss', ab.hp <= 0, { dmg, kill: ab.hp <= 0, killName: name });
+ 
+     if (ab.hp <= 0){
+         ab.slain++;
+diff --git a/src/warriors.js b/src/warriors.js
+index ba0db5cd..3ea1c5c2 100644
+--- a/src/warriors.js
++++ b/src/warriors.js
+@@ -1,16 +1,19 @@
+ // Expansion: Silverblood warriors.
+ //
+ // Recruitable named warriors with random stats, Fire Emblem-style growth
+-// rates, perks, temperament and loyalty. Each has her own Awakening meter.
+-// Warriors can be rested, retired, killed (with a chance to defy death),
+-// Awaken into named bosses, or turn on you out of a grudge.
++// rates, perks, temperament and loyalty. Only these warriors can Awaken:
++// each has a personal meter and a hidden breaking point. Warriors can be
++// rested, pushed to Full Power, handed a Black Card, retired, dismissed,
++// killed (with a chance to defy death), Awaken into named bosses, or come
++// back later as veterans or as enemies.
+ //
+ // State: global.race.warriors (per run), global.stats.silver_hall (across runs).
+ 
+ import { global, sizeApproximation } from './vars.js';
+ import { loc } from './locale.js';
+ import { vBind, messageQueue, clearElement } from './functions.js';
+-import { yokiActive, yokiState } from './silverblood.js';
++import { yokiActive, yokiState, hallsFunded, abyssVars } from './silverblood.js';
++import { traits } from './races.js';
+ 
+ // ---------------------------------------------------------------------------
+ // Tuning
+@@ -32,13 +35,97 @@ export const warriorVars = {
+     growMax: 5,
+     restCooldown: 120,        // seconds between rest/activate switches
+     restDecay: 3,             // personal meter lost per day while resting
+-    activeGain: 0.2,          // personal meter gained per day while active
++    activeGain: 0.12,         // personal meter gained per day while active
+     armyDivisor: 800,         // army bonus = total might / this
+     senseDivisor: 500,        // hunt damage bonus = total sense / this
+     willDivisor: 1000,        // army stress reduction = total will / this (max 50%)
+     speedCdCut: 1000,         // abyss cooldown cut = total speed / this (max 50%)
+     defyBase: 5,
+     defyMax: 25,
++    defyMeter: 20,            // meter added when she defies death
++
++    // Breaking point (hidden): average of two rolls in this range
++    breakMin: 70,
++    breakMax: 130,
++    warn: [0.6, 0.8, 0.92],   // flicker, strained, on the brink (share of her breaking point)
++
++    // Rising floor (share of her breaking point that rest can't go below)
++    floorLevel: 0.015,        // per level above 1
++    floorDefy: 0.06,          // per death defied
++    floorCap: 0.6,
++    floorHallCut: 0.04,       // each funded Silent Hall lowers the cap
++    floorCapMin: 0.4,
++
++    // Full Power
++    fullBonus: 2,             // her bonuses x2
++    fullMeter: 3,             // her meter gain x3
++
++    // Calming
++    handlerCut: 0.4,          // assigned Handler: -40% meter gain for her
++    orgCalm: 0.02,            // each Organization: -2% meter gain for all
++    orgCalmMax: 0.2,
++    hallRest: 0.3,            // each funded Silent Hall: +30% rest recovery
++    hallRestMax: 1.5,
++
++    // Stillwater Tonic
++    tonicDays: 60,            // days per tonic, per Apothecary
++    tonicBase: 2,             // storage: base + 1 per Apothecary
++    tonicCut: 40,             // meter removed (ignores the floor)
++    tonicFail: 15,            // % chance a Black Card tonic fails (+5 meter)
++    restSaveRisk: 12,         // % chance resting her at the brink is too late
++
++    // Black Card
++    cardLoyalty: 4,           // sisters' loyalty change on honour (+) or ignore (-)
++
++    // Leaving
++    sevBase: 10,              // severance = wage x (base + days served / div)
++    sevDiv: 10,
++    dismissBase: 2,           // sisters lose base + days served / div loyalty (max)
++    dismissDiv: 25,
++    dismissMax: 10,
++    vetMin: 30,               // days away before a veteran can return
++    vetChance: 30,            // % per pool refresh (one veteran at most)
++    vetMax: 12,
++    exileRiseAt: 0.75,        // leaving above this share of her limit: meter may keep rising
++    exileRise: 0.15,          // per day
++    exileFall: 1,             // per day
++    exileCalm: 1,             // % per day that a restless veteran settles down
++
++    chronMax: 10,
++    hallChron: 5,
++};
++
++// Seats: [milestone check, cost]. Seat 1 is free with the first Organization.
++export const seatList = [
++    { req: 'org',      cost: {} },
++    { req: 'iron',     cost: { Money: 2000, Iron: 500 } },
++    { req: 'hall',     cost: { Money: 5000, Iron: 1500, Furs: 1000 } },
++    { req: 'boot',     cost: { Money: 12000, Cement: 3000 } },
++    { req: 'apoth',    cost: { Money: 25000, Cement: 6000, Steel: 1500 } },
++    { req: 'electric', cost: { Money: 45000, Steel: 4000, Copper: 4000 } },
++    { req: 'industry', cost: { Money: 80000, Steel: 10000 } },
++    { req: 'space',    cost: { Money: 300000, Steel: 40000, Titanium: 12000 } },
++];
++
++const seatReq = {
++    org(){ return orgCount() >= 1; },
++    iron(){ return (global.tech['mining'] || 0) >= 3; },
++    hall(){ return global.city['silent_hall'] && global.city.silent_hall.count >= 1; },
++    boot(){ return (global.tech['boot_camp'] || 0) >= 1; },
++    apoth(){ return global.city['apothecary'] && global.city.apothecary.count >= 1; },
++    electric(){ return (global.tech['high_tech'] || 0) >= 2; },
++    industry(){ return (global.tech['high_tech'] || 0) >= 3; },
++    space(){ return (global.tech['space'] || 0) >= 2; },
++};
++
++// Wild Awakened Ones: average days between sightings, by era (high_tech level).
++export const wildVars = {
++    era: [[0, 360], [2, 240], [5, 160], [8, 120]],
++    infested: 1.5,           // more often on Monster-infested planets
++    fameLevels: 60,          // total roster levels for the full fame bonus
++    fameMax: 1,              // up to 2x as often
++    max: 3,                  // most wild Awakened at large at once
++    strMin: 30, strMax: 60, strMult: 1.25,
+ };
+ 
+ export const fights = {
+@@ -79,19 +166,74 @@ const names = [
+     'Agna','Branwen','Cerys','Dagny','Elske','Fenna','Greta','Hedda','Inga','Jessamy'
+ ];
+ 
++const wildFirst = ['Gor','Vesh','Mal','Thra','Ur','Skel','Nyx','Brak','Oss','Zul','Kra','Hesk','Drav','Yth','Gash','Quor'];
++const wildSecond = ['oth','ra','gul','ven','mire','ax','esh','ul','orn','ith','ak','ys','umbra','eth'];
++const wildEpithets = 12;  // sw_epithet_0 .. 11
++
++const battleKinds = Object.keys(fights);
++
+ // ---------------------------------------------------------------------------
+ // State
+ // ---------------------------------------------------------------------------
+ 
+ export function warriorState(){
+     if (!global.race['warriors']){
+-        global.race['warriors'] = { roster: [], pool: [], refresh: 0, nextId: 1, lastDay: global.stats.days || 0, named: [], grudges: [], msg: '' };
++        global.race['warriors'] = { roster: [], pool: [], refresh: 0, nextId: 1, lastDay: global.stats.days || 0, named: [], grudges: [] };
+     }
+     let w = global.race.warriors;
+-    ['roster','pool','named','grudges'].forEach(k => { if (!Array.isArray(w[k])){ w[k] = []; } });
++    ['roster','pool','named','grudges','vets'].forEach(k => { if (!Array.isArray(w[k])){ w[k] = []; } });
++    if (w.seats === undefined){
++        // Older saves: keep every warrior already hired.
++        w.seats = Math.min(warriorVars.maxSlots, Math.max(w.roster.length, orgCount() >= 1 ? 1 : 0));
++    }
++    if (w.tonic === undefined){ w.tonic = 0; }
++    if (w.woke === undefined){ w.woke = 0; }
++    if (w.wildSlain === undefined){ w.wildSlain = 0; }
++    if (w.msg !== undefined){ delete w.msg; }
++    w.roster.forEach(wr => {
++        fixWarrior(wr);
++        if (wr.rec.j === null){ wr.rec.j = today(); wr.rec.st = 1; }
++    });
++    w.pool.forEach(fixWarrior);
++    w.vets.forEach(fixWarrior);
+     return w;
+ }
+ 
++// Adds fields from newer versions to an existing warrior.
++function fixWarrior(wr){
++    if (wr.bp === undefined){ wr.bp = rollBreak(); }
++    if (wr.fp === undefined){ wr.fp = false; }
++    if (wr.hd === undefined){ wr.hd = false; }
++    if (wr.card === undefined){ wr.card = false; }
++    if (wr.ws === undefined){ wr.ws = 0; }
++    if (wr.defied === undefined){ wr.defied = 0; }
++    if (!Array.isArray(wr.chron)){ wr.chron = []; }
++    if (!wr.rec){ wr.rec = newRecord(wr); }
++    battleKinds.forEach(k => { if (!wr.rec.b[k]){ wr.rec.b[k] = [0, 0]; } });
++}
++
++function newRecord(wr){
++    let b = {};
++    battleKinds.forEach(k => { b[k] = [0, 0]; });
++    return {
++        j: null,             // day she first joined (null while a recruit)
++        st: 0,               // stints served
++        sd: 0,               // days served
++        r0: rankOf(wr),      // rank when recruited
++        rb: rankOf(wr),      // best rank reached
++        fee: 0, wg: 0,       // fees paid, total wages
++        rd: 0, rn: 0,        // days rested, number of rests
++        ud: 0,               // days unpaid
++        b,                   // battles: kind -> [won, lost]
++        aw: 0, ns: 0, fs: 0, // Awakened slain, named enemies slain, former sisters slain
++        ad: 0, ak: 0,        // Abyssal damage, Abyssal killing blows
++        cl: 0, dd: 0,        // comrades lost, deaths defied
++        pm: Math.floor(wr.meter || 0),
++        ll: Math.round(wr.loyalty || 0),
++        s0: Object.assign({}, wr.stats),
++    };
++}
++
+ function hall(){
+     if (!Array.isArray(global.stats['silver_hall'])){ global.stats['silver_hall'] = []; }
+     return global.stats.silver_hall;
+@@ -99,15 +241,34 @@ function hall(){
+ 
+ function addHall(wr, fate){
+     let h = hall();
+-    h.unshift({ n: wr.name, r: rankOf(wr), l: wr.lvl, f: fate, d: global.stats.days || 0 });
++    let entry = { n: wr.name, r: rankOf(wr), l: wr.lvl, f: fate, d: global.stats.days || 0 };
++    if (wr.rec){
++        entry.t = wr.temper;
++        entry.rec = JSON.parse(JSON.stringify(wr.rec));
++        entry.ch = (wr.chron || []).slice(-warriorVars.hallChron);
++        entry.s = Object.assign({}, wr.stats);
++    }
++    h.unshift(entry);
+     if (h.length > 50){ h.length = 50; }
+ }
+ 
+-export function slots(){
+-    let orgs = global.city['organization'] ? global.city.organization.count : 0;
+-    return Math.min(warriorVars.maxSlots, orgs);
++function chron(wr, key, args){
++    wr.chron.push({ d: global.stats.days || 0, k: key, a: args || [] });
++    if (wr.chron.length > warriorVars.chronMax){ wr.chron.splice(0, wr.chron.length - warriorVars.chronMax); }
++}
++
++function orgCount(){
++    return global.city && global.city['organization'] ? global.city.organization.count : 0;
++}
++
++export function seats(){
++    if (!global.race['warriors']){ return 0; }
++    return global.race.warriors.seats || 0;
+ }
+ 
++// Kept for older callers.
++export function slots(){ return seats(); }
++
+ export function active(){
+     if (!yokiActive() || !global.race['warriors']){ return []; }
+     return global.race.warriors.roster.filter(x => x.status === 'active');
+@@ -116,6 +277,7 @@ export function active(){
+ function rand(min, max){ return Math.rand(min, max + 1); } // inclusive
+ function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+ function pick(list){ return list[Math.rand(0, list.length)]; }
++function today(){ return global.stats.days || 0; }
+ 
+ // ---------------------------------------------------------------------------
+ // Generation
+@@ -140,6 +302,10 @@ function rollStat(){
+     return Math.round((rand(10, 90) + rand(10, 90)) / 2);
+ }
+ 
++function rollBreak(){
++    return Math.round((rand(warriorVars.breakMin, warriorVars.breakMax) + rand(warriorVars.breakMin, warriorVars.breakMax)) / 2);
++}
++
+ function rollPerks(){
+     let good = Object.keys(perkList).filter(p => perkList[p].good);
+     let bad = Object.keys(perkList).filter(p => !perkList[p].good);
+@@ -172,7 +338,7 @@ export function makeWarrior(){
+     if (perks.includes('frail_mind')){ growth.ctl = Math.max(5, growth.ctl - 20); }
+     if (perks.includes('haunted')){ stats.sns = Math.min(100, stats.sns + 15); }
+     let temper = pick(Object.keys(temperaments));
+-    let used = w.roster.concat(w.pool).map(x => x.name);
++    let used = w.roster.concat(w.pool, w.vets).map(x => x.name);
+     let free = names.filter(n => !used.includes(n));
+     let wr = {
+         id: w.nextId++,
+@@ -190,6 +356,7 @@ export function makeWarrior(){
+     if (perks.includes('veteran')){
+         for (let i = 0; i < 2; i++){ levelUp(wr, true); }
+     }
++    fixWarrior(wr);
+     wr.fee = feeFor(wr.stats);
+     wr.wage = baseWage(wr);
+     return wr;
+@@ -211,6 +378,16 @@ export function refreshPool(paid){
+     }
+     w.pool.splice(0, w.pool.length);
+     for (let i = 0; i < warriorVars.poolSize; i++){ w.pool.push(makeWarrior()); }
++
++    // A former warrior may ask to come back.
++    let ready = w.vets.filter(v => v.mood !== 'bitter' && today() - v.left >= warriorVars.vetMin);
++    if (ready.length && Math.rand(0, 100) < warriorVars.vetChance){
++        let v = pick(ready);
++        let offer = JSON.parse(JSON.stringify(v));
++        offer.returning = true;
++        offer.fee = Math.round(feeFor(offer.stats) * (v.mood === 'grateful' ? 0.5 : 1));
++        w.pool[w.pool.length - 1] = offer;
++    }
+     w.refresh = warriorVars.poolRefreshDays;
+     return true;
+ }
+@@ -237,6 +414,10 @@ function levelUp(wr, silent){
+         }
+     });
+     wr.wage = baseWage(wr);
++    if (wr.rec){
++        wr.rec.rb = Math.min(wr.rec.rb, rankOf(wr));
++        if (!silent && wr.lvl % 5 === 0){ chron(wr, 'sw_ch_level', [wr.lvl, rankOf(wr)]); }
++    }
+     if (!silent){
+         messageQueue(loc('sw_levelup',[wr.name, wr.lvl, gains.length ? gains.join(', ') : loc('sw_levelup_none')]),'success',false,['combat']);
+     }
+@@ -252,6 +433,81 @@ function gainXp(wr, xp){
+     }
+ }
+ 
++// ---------------------------------------------------------------------------
++// Awakening: breaking point, floor, warnings
++// ---------------------------------------------------------------------------
++
++export function floorCap(){
++    return Math.max(warriorVars.floorCapMin, warriorVars.floorCap - hallsFunded() * warriorVars.floorHallCut);
++}
++
++export function floorOf(wr){
++    let share = warriorVars.floorLevel * (wr.lvl - 1) + warriorVars.floorDefy * (wr.defied || 0);
++    return wr.bp * Math.min(floorCap(), share);
++}
++
++// 0 calm, 1 eyes flicker gold, 2 strained, 3 on the brink
++export function stageOf(wr){
++    let r = wr.meter / wr.bp;
++    let s = 0;
++    warriorVars.warn.forEach((v, i) => { if (r >= v){ s = i + 1; } });
++    return s;
++}
++
++export function meterMult(wr){
++    let m = 1.5 - wr.stats.ctl / 100;
++    if (wr.perks.includes('hot_headed')){ m *= 2; }
++    if (wr.perks.includes('iron_control')){ m *= 0.6; }
++    if (global.race['yoki_power']){ m *= traits.yoki_power.vars()[1] / 100; }
++    m *= Math.max(0, 1 - yokiState().abyss.slain * abyssVars.calmReward);
++    if (wr.hd){ m *= 1 - warriorVars.handlerCut; }
++    m *= 1 - Math.min(warriorVars.orgCalmMax, orgCount() * warriorVars.orgCalm);
++    if (wr.fp){ m *= warriorVars.fullMeter; }
++    return Math.max(0.05, m);
++}
++
++function restRate(){
++    return warriorVars.restDecay * (1 + Math.min(warriorVars.hallRestMax, hallsFunded() * warriorVars.hallRest));
++}
++
++// Call after any change to her meter. Returns true if she Awakened.
++function checkMeter(wr){
++    if (wr.rec){ wr.rec.pm = Math.max(wr.rec.pm, Math.floor(wr.meter)); }
++    if (wr.meter >= wr.bp){
++        awaken(wr);
++        return true;
++    }
++    let s = stageOf(wr);
++    if (s > wr.ws){
++        wr.ws = s;
++        if (s === 1){ messageQueue(loc('sw_warn_1',[wr.name]),'caution',false,['combat']); }
++        else if (s === 2){
++            messageQueue(loc('sw_warn_2',[wr.name]),'warning',false,['combat']);
++            chron(wr, 'sw_ch_strained');
++        }
++        else if (s === 3){
++            wr.card = true;
++            messageQueue(loc('sw_card_msg',[wr.name]),'danger',false,['combat']);
++            chron(wr, 'sw_ch_card');
++        }
++    }
++    else if (s < wr.ws){
++        wr.ws = s;
++        if (s < 3){ wr.card = false; }
++    }
++    return false;
++}
++
++function findWarrior(id){
++    return warriorState().roster.find(x => x.id === id);
++}
++
++function removeFromRoster(wr){
++    let w = warriorState();
++    let i = w.roster.findIndex(x => x.id === wr.id);
++    if (i >= 0){ w.roster.splice(i, 1); }
++}
++
+ // ---------------------------------------------------------------------------
+ // Player actions
+ // ---------------------------------------------------------------------------
+@@ -259,48 +515,274 @@ function gainXp(wr, xp){
+ export function hire(id){
+     let w = warriorState();
+     let idx = w.pool.findIndex(x => x.id === id);
+-    if (idx < 0 || w.roster.length >= slots()){ return false; }
+-    let wr = w.pool[idx];
+-    if (global.resource.Money.amount < wr.fee){ return false; }
+-    global.resource.Money.amount -= wr.fee;
++    if (idx < 0 || w.roster.length >= seats()){ return false; }
++    let offer = w.pool[idx];
++    if (global.resource.Money.amount < offer.fee){ return false; }
++    let wr = offer;
++    if (offer.returning){
++        let vi = w.vets.findIndex(v => v.id === offer.id);
++        if (vi < 0){ w.pool.splice(idx, 1); return false; }
++        wr = w.vets.splice(vi, 1)[0];
++        let away = today() - wr.left;
++        if (wr.mood === 'grateful'){ wr.loyalty = clamp(wr.loyalty + 10, 0, 100); }
++        wr.loyalty = Math.max(wr.loyalty, temperaments[wr.temper].start - 10);
++        ['left','mood','how','rise','returning'].forEach(k => delete wr[k]);
++        wr.fee = offer.fee;
++        wr.status = 'active'; wr.cd = 0; wr.unpaid = 0;
++        wr.fp = false; wr.hd = false; wr.card = false;
++        wr.ws = 0;
++        chron(wr, 'sw_ch_return', [away]);
++        messageQueue(loc('sw_returned',[wr.name, rankOf(wr)]),'success',false,['combat']);
++    }
++    else {
++        wr.rec.r0 = rankOf(wr);
++        wr.rec.rb = wr.rec.r0;
++        wr.rec.s0 = Object.assign({}, wr.stats);
++        messageQueue(loc('sw_hired',[wr.name, rankOf(wr)]),'success',false,['combat']);
++    }
++    global.resource.Money.amount -= offer.fee;
+     w.pool.splice(idx, 1);
++    if (wr.rec.j === null){ wr.rec.j = today(); }
++    wr.rec.st++;
++    wr.rec.fee += offer.fee;
++    wr.wage = baseWage(wr);
++    if (!offer.returning){ chron(wr, 'sw_ch_joined', [rankOf(wr)]); }
+     w.roster.push(wr);
+-    messageQueue(loc('sw_hired',[wr.name, rankOf(wr)]),'success',false,['combat']);
+     return true;
+ }
+ 
+ export function toggleRest(id){
+-    let wr = warriorState().roster.find(x => x.id === id);
++    let wr = findWarrior(id);
+     if (!wr || wr.cd > 0){ return false; }
+     wr.status = wr.status === 'active' ? 'resting' : 'active';
++    if (wr.status === 'resting'){
++        wr.fp = false;
++        wr.rec.rn++;
++    }
+     wr.cd = warriorVars.restCooldown;
+     return true;
+ }
+ 
++export function toggleFull(id){
++    let wr = findWarrior(id);
++    if (!wr || wr.status !== 'active'){ return false; }
++    wr.fp = !wr.fp;
++    if (wr.fp){ messageQueue(loc('sw_full_on',[wr.name]),'caution',false,['combat']); }
++    return true;
++}
++
++export function handlerCount(){
++    return global.civic['handler'] ? global.civic.handler.workers : 0;
++}
++
++export function handlersUsed(){
++    return global.race['warriors'] ? global.race.warriors.roster.filter(x => x.hd).length : 0;
++}
++
++export function toggleHandler(id){
++    let wr = findWarrior(id);
++    if (!wr){ return false; }
++    if (wr.hd){ wr.hd = false; return true; }
++    if (handlersUsed() >= handlerCount()){ return false; }
++    wr.hd = true;
++    return true;
++}
++
++export function tonicCap(){
++    let ap = global.city['apothecary'] ? global.city.apothecary.count : 0;
++    return ap > 0 ? warriorVars.tonicBase + ap : 0;
++}
++
++export function useTonic(id){
++    let w = warriorState();
++    let wr = findWarrior(id);
++    if (!wr || w.tonic < 1){ return false; }
++    w.tonic--;
++    wr.meter = Math.max(0, wr.meter - warriorVars.tonicCut);
++    chron(wr, 'sw_ch_tonic');
++    messageQueue(loc('sw_tonic_used',[wr.name]),'info',false,['combat']);
++    checkMeter(wr);
++    return true;
++}
++
++// Black Card choices: honour | tonic | rest | ignore
++export function blackCard(id, choice){
++    let wr = findWarrior(id);
++    if (!wr || !wr.card){ return false; }
++    let w = warriorState();
++    switch (choice){
++        case 'honour':
++            removeFromRoster(wr);
++            chron(wr, 'sw_ch_honoured');
++            addHall(wr, 'honoured');
++            w.roster.forEach(o => changeLoyalty(o, warriorVars.cardLoyalty));
++            messageQueue(loc('sw_card_honoured',[wr.name]),'special',false,['combat']);
++            return true;
++        case 'tonic':
++            if (w.tonic < 1){ return false; }
++            w.tonic--;
++            wr.fp = false;
++            if (Math.rand(0, 100) < warriorVars.tonicFail){
++                wr.meter += 5;
++                messageQueue(loc('sw_card_tonic_fail',[wr.name]),'danger',false,['combat']);
++                checkMeter(wr);
++                return true;
++            }
++            wr.card = false;
++            wr.meter = Math.max(0, wr.meter - warriorVars.tonicCut);
++            chron(wr, 'sw_ch_saved');
++            messageQueue(loc('sw_card_saved',[wr.name]),'success',false,['combat']);
++            checkMeter(wr);
++            return true;
++        case 'rest':
++            wr.card = false;
++            if (Math.rand(0, 100) < warriorVars.restSaveRisk){
++                messageQueue(loc('sw_card_too_late',[wr.name]),'danger',false,['combat']);
++                awaken(wr);
++                return true;
++            }
++            if (wr.status === 'active'){ wr.rec.rn++; }
++            wr.status = 'resting';
++            wr.fp = false;
++            wr.cd = warriorVars.restCooldown;
++            chron(wr, 'sw_ch_saved');
++            messageQueue(loc('sw_card_rest',[wr.name]),'warning',false,['combat']);
++            return true;
++        case 'ignore':
++            wr.card = false;
++            chron(wr, 'sw_ch_ignored');
++            w.roster.forEach(o => { if (o.id !== wr.id){ changeLoyalty(o, -warriorVars.cardLoyalty); } });
++            messageQueue(loc('sw_card_ignored',[wr.name]),'warning',false,['combat']);
++            return true;
++    }
++    return false;
++}
++
+ export function rename(id, name){
+-    let wr = warriorState().roster.find(x => x.id === id);
++    let wr = findWarrior(id);
+     if (!wr || typeof name !== 'string'){ return; }
+     let clean = name.replace(/[<>]/g, '').trim().slice(0, 24);
+     if (clean.length){ wr.name = clean; }
+ }
+ 
+-export function retire(id){
++// ---------------------------------------------------------------------------
++// Seats
++// ---------------------------------------------------------------------------
++
++export function nextSeat(){
++    let n = seats();
++    if (n >= seatList.length){ return null; }
++    let s = seatList[n];
++    return { n: n + 1, req: s.req, cost: s.cost, ready: seatReq[s.req]() };
++}
++
++function canPay(cost){
++    return Object.keys(cost).every(r => global.resource[r] && global.resource[r].amount >= cost[r]);
++}
++
++export function commissionSeat(){
+     let w = warriorState();
+-    let idx = w.roster.findIndex(x => x.id === id);
+-    if (idx < 0){ return; }
+-    let wr = w.roster[idx];
+-    w.roster.splice(idx, 1);
+-    addHall(wr, 'retired');
+-    // A warrior who leaves unhappy may come back for revenge.
+-    let chance = Math.max(0, 40 - wr.loyalty) * 2.5 * temperaments[wr.temper].rogue;
+-    if (Math.rand(0, 100) < chance){
+-        w.grudges.push({ name: wr.name, str: bossStrength(wr, 1.2), due: (global.stats.days || 0) + rand(60, 200) });
++    let s = nextSeat();
++    if (!s || !s.ready || !canPay(s.cost)){ return false; }
++    Object.keys(s.cost).forEach(r => { global.resource[r].amount -= s.cost[r]; });
++    w.seats++;
++    messageQueue(loc('sw_seat_done',[w.seats]),'success',false,['combat']);
++    return true;
++}
++
++// ---------------------------------------------------------------------------
++// Leaving: retire, dismiss, veterans
++// ---------------------------------------------------------------------------
++
++export function severance(wr){
++    return Math.round(wr.wage * (warriorVars.sevBase + wr.rec.sd / warriorVars.sevDiv));
++}
++
++export function backPay(wr){
++    return wr.unpaid * wr.wage;
++}
++
++export function retireCost(wr){
++    return severance(wr) + backPay(wr);
++}
++
++export function partingMood(wr, how){
++    let score = wr.loyalty + Math.min(20, wr.rec.sd / 10) - Math.min(15, wr.rec.ud) - Math.min(15, 3 * wr.rec.cl);
++    score += how === 'retired' ? 10 : -20 - 5 * wr.unpaid;
++    return score >= 60 ? 'grateful' : score >= 35 ? 'neutral' : 'bitter';
++}
++
++function dismissHit(wr){
++    return Math.min(warriorVars.dismissMax, warriorVars.dismissBase + wr.rec.sd / warriorVars.dismissDiv);
++}
++
++function leave(wr, how){
++    let w = warriorState();
++    let mood = partingMood(wr, how);
++    removeFromRoster(wr);
++    chron(wr, how === 'retired' ? 'sw_ch_retired' : 'sw_ch_dismissed', [loc(`sw_mood_${mood}`)]);
++    addHall(wr, how);
++    wr.left = today();
++    wr.mood = mood;
++    wr.how = how;
++    wr.rise = wr.meter >= wr.bp * warriorVars.exileRiseAt;
++    wr.status = 'resting'; wr.fp = false; wr.hd = false; wr.card = false; wr.unpaid = 0;
++    w.vets.unshift(wr);
++    if (w.vets.length > warriorVars.vetMax){ w.vets.length = warriorVars.vetMax; }
++    if (mood === 'bitter'){
++        let chance = 50 * temperaments[wr.temper].rogue;
++        if (Math.rand(0, 100) < chance){
++            w.grudges.push({ id: wr.id, name: wr.name, str: bossStrength(wr, 1.2), due: today() + rand(60, 200), former: formerOf(wr) });
++        }
++    }
++    messageQueue(loc(how === 'retired' ? 'sw_retired' : 'sw_dismissed',[wr.name, loc(`sw_mood_${mood}`)]),'info',false,['combat']);
++}
++
++export function retire(id){
++    let wr = findWarrior(id);
++    if (!wr){ return false; }
++    let cost = retireCost(wr);
++    if (global.resource.Money.amount < cost){ return false; }
++    global.resource.Money.amount -= cost;
++    wr.rec.wg += cost;
++    leave(wr, 'retired');
++    return true;
++}
++
++export function dismiss(id){
++    let wr = findWarrior(id);
++    if (!wr){ return false; }
++    let hit = dismissHit(wr);
++    leave(wr, 'dismissed');
++    warriorState().roster.forEach(o => changeLoyalty(o, -hit));
++    return true;
++}
++
++function exileTick(w){
++    for (let i = w.vets.length - 1; i >= 0; i--){
++        let v = w.vets[i];
++        if (v.rise){
++            v.meter += warriorVars.exileRise * Math.max(0.3, 1.5 - v.stats.ctl / 100);
++            if (Math.rand(0, 100) < warriorVars.exileCalm){ v.rise = false; }
++        }
++        else {
++            v.meter = Math.max(0, v.meter - warriorVars.exileFall);
++        }
++        if (v.meter >= v.bp){
++            w.vets.splice(i, 1);
++            let away = today() - v.left;
++            w.woke++;
++            chron(v, 'sw_ch_exile_awakened', [away]);
++            addHall(v, 'awakened_exile');
++            w.named.push({ id: v.id, name: v.name, str: bossStrength(v, 1), kind: 'awakened', former: formerOf(v) });
++            w.grudges = w.grudges.filter(g => g.id !== v.id);
++            messageQueue(loc('sw_exile_awakened',[v.name, away]),'danger',false,['combat']);
++        }
+     }
+-    messageQueue(loc('sw_retired',[wr.name]),'info',false,['combat']);
+ }
+ 
+ // ---------------------------------------------------------------------------
+-// Bosses made from your own warriors
++// Bosses made from your own warriors, and wild Awakened Ones
+ // ---------------------------------------------------------------------------
+ 
+ function techFactor(){
+@@ -311,9 +793,8 @@ function bossStrength(wr, mult){
+     return Math.round((might(wr) * 2 + wr.lvl * 10) * mult * techFactor());
+ }
+ 
+-function turnBoss(wr, kind, mult){
+-    let w = warriorState();
+-    w.named.push({ name: wr.name, str: bossStrength(wr, mult), kind });
++function formerOf(wr){
++    return { r: rankOf(wr), sd: wr.rec ? wr.rec.sd : 0 };
+ }
+ 
+ export function namedBoss(){
+@@ -324,10 +805,47 @@ export function namedBoss(){
+ export function namedDefeated(){
+     let w = warriorState();
+     let b = w.named.shift();
+-    if (b){ addHall({ name: b.name, lvl: 0, stats: { str: 0, spd: 0, ctl: 0, sns: 0, wil: 0 } }, b.kind === 'rogue' ? 'slain_rogue' : 'slain_awakened'); }
++    if (b && b.kind === 'wild'){ w.wildSlain++; }
++    else if (b){ addHall({ name: b.name, lvl: 0, stats: { str: 0, spd: 0, ctl: 0, sns: 0, wil: 0 } }, b.kind === 'rogue' ? 'slain_rogue' : 'slain_awakened'); }
++    return b;
++}
++
++export function wildCount(){
++    let w = global.race['warriors'];
++    return w ? w.named.filter(b => b.kind === 'wild').length : 0;
++}
++
++function wildName(){
++    return `${pick(wildFirst)}${pick(wildSecond)}, ${loc(`sw_epithet_${Math.rand(0, wildEpithets)}`)}`;
++}
++
++export function wildInterval(){
++    let tech = global.tech['high_tech'] || 0;
++    let days = wildVars.era[0][1];
++    wildVars.era.forEach(e => { if (tech >= e[0]){ days = e[1]; } });
++    let mult = 1;
++    if (global.city.ptrait && global.city.ptrait.includes('infested')){ mult *= wildVars.infested; }
++    let fame = global.race['warriors'] ? global.race.warriors.roster.reduce((t, x) => t + x.lvl, 0) : 0;
++    mult *= 1 + Math.min(wildVars.fameMax, fame / wildVars.fameLevels * wildVars.fameMax);
++    return days / mult;
++}
++
++export function spawnWild(){
++    let w = warriorState();
++    let str = Math.round(rand(wildVars.strMin, wildVars.strMax) * techFactor() * wildVars.strMult);
++    let b = { name: wildName(), str, kind: 'wild' };
++    w.named.push(b);
++    messageQueue(loc('sw_wild_spawn',[b.name]),'danger',false,['combat']);
+     return b;
+ }
+ 
++function wildTick(w){
++    if (orgCount() < 1 || !global.tech['military'] || wildCount() >= wildVars.max){ return; }
++    if (Math.rand(0, 10000) < 10000 / wildInterval()){
++        spawnWild();
++    }
++}
++
+ function moraleHit(amount, except){
+     warriorState().roster.forEach(o => {
+         if (o.id !== except){
+@@ -346,15 +864,27 @@ function changeLoyalty(wr, delta){
+         delta *= t.gain;
+     }
+     wr.loyalty = clamp(wr.loyalty + delta, 0, 100);
++    if (wr.rec){ wr.rec.ll = Math.min(wr.rec.ll, Math.round(wr.loyalty)); }
++}
++
++function comradeLost(wr){
++    warriorState().roster.forEach(o => {
++        if (o.id !== wr.id){
++            o.rec.cl++;
++            chron(o, 'sw_ch_comrade', [wr.name]);
++        }
++    });
+ }
+ 
+ function awaken(wr){
+     let w = warriorState();
+-    w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
+-    turnBoss(wr, 'awakened', 1);
++    removeFromRoster(wr);
++    w.woke++;
++    chron(wr, 'sw_ch_awakened');
++    w.named.push({ id: wr.id, name: wr.name, str: bossStrength(wr, 1), kind: 'awakened', former: formerOf(wr) });
+     addHall(wr, 'awakened');
+-    yokiState().woke++;
+-    moraleHit(3, wr.id);
++    comradeLost(wr);
++    moraleHit(3 + (wr.card ? warriorVars.cardLoyalty : 0), wr.id);
+     messageQueue(loc('sw_awakened',[wr.name]),'danger',false,['combat']);
+ }
+ 
+@@ -367,67 +897,88 @@ export function warriorsTick(){
+     if (!yokiActive()){ return; }
+     let w = warriorState();
+     w.roster.forEach(wr => { if (wr.cd > 0){ wr.cd--; } });
+-    if (slots() > 0 && w.pool.length === 0 && w.refresh <= 0){
++    if (w.seats === 0 && orgCount() >= 1){
++        w.seats = 1;
++        messageQueue(loc('sw_seat_done',[1]),'success',false,['combat']);
++    }
++    // Handlers who lost their jobs leave their warriors.
++    let over = handlersUsed() - handlerCount();
++    for (let i = w.roster.length - 1; i >= 0 && over > 0; i--){
++        if (w.roster[i].hd){ w.roster[i].hd = false; over--; }
++    }
++    if (seats() > 0 && w.pool.length === 0 && w.refresh <= 0){
+         refreshPool(false);
+     }
+-    let today = global.stats.days || 0;
+-    if (today !== w.lastDay){
+-        let n = Math.max(0, Math.min(10, today - w.lastDay));
+-        w.lastDay = today;
++    let now = today();
++    if (now !== w.lastDay){
++        let n = Math.max(0, Math.min(10, now - w.lastDay));
++        w.lastDay = now;
+         for (let i = 0; i < n; i++){ dailyTick(w); }
+     }
+ }
+ 
+-function meterMult(wr){
+-    let m = 1.5 - wr.stats.ctl / 100;
+-    if (wr.perks.includes('hot_headed')){ m *= 2; }
+-    if (wr.perks.includes('iron_control')){ m *= 0.6; }
+-    return Math.max(0.1, m);
+-}
+-
+ function dailyTick(w){
+     if (w.refresh > 0){ w.refresh--; }
+-    if (w.refresh <= 0 && slots() > 0){ refreshPool(false); }
++    if (w.refresh <= 0 && seats() > 0){ refreshPool(false); }
++
++    // Stillwater Tonic
++    let cap = tonicCap();
++    if (cap > 0 && w.tonic < cap){
++        w.tonic = Math.min(cap, w.tonic + global.city.apothecary.count / warriorVars.tonicDays);
++    }
+ 
+     // Wages, loyalty, meters
+     w.roster.slice().forEach(wr => {
++        wr.rec.sd++;
+         if (global.resource.Money.amount >= wr.wage){
+             global.resource.Money.amount -= wr.wage;
++            wr.rec.wg += wr.wage;
+             wr.unpaid = 0;
+             changeLoyalty(wr, 0.3);
+         }
+         else {
+             wr.unpaid++;
++            wr.rec.ud++;
+             changeLoyalty(wr, wr.perks.includes('greedy') ? -8 : -4);
+-            if (wr.unpaid === 1){ messageQueue(loc('sw_unpaid',[wr.name]),'warning',false,['combat']); }
++            if (wr.unpaid === 1){
++                messageQueue(loc('sw_unpaid',[wr.name]),'warning',false,['combat']);
++                chron(wr, 'sw_ch_unpaid');
++            }
+         }
+         if (wr.status === 'resting'){
+-            wr.meter = Math.max(0, wr.meter - warriorVars.restDecay);
++            wr.rec.rd++;
++            let floor = floorOf(wr);
++            if (wr.meter > floor){ wr.meter = Math.max(floor, wr.meter - restRate()); }
+             if (wr.temper === 'proud'){ changeLoyalty(wr, -0.4); }
+         }
+         else {
+             wr.meter += warriorVars.activeGain * meterMult(wr);
+         }
+-        if (wr.meter >= 100){ awaken(wr); return; }
++        if (checkMeter(wr)){ return; }
+ 
+         // Desertion
+         if ((wr.loyalty < 10 || (wr.loyalty < 20 && wr.unpaid >= 3)) && Math.rand(0, 100) < 3){
+-            w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
++            removeFromRoster(wr);
++            chron(wr, 'sw_ch_deserted');
+             addHall(wr, 'deserted');
+             let rogue = (wr.loyalty < 5 ? 60 : 30) * temperaments[wr.temper].rogue;
+             if (Math.rand(0, 100) < rogue){
+-                w.grudges.push({ name: wr.name, str: bossStrength(wr, 1.2), due: (global.stats.days || 0) + rand(30, 90) });
++                w.grudges.push({ id: wr.id, name: wr.name, str: bossStrength(wr, 1.2), due: today() + rand(30, 90), former: formerOf(wr) });
+             }
+             messageQueue(loc('sw_deserted',[wr.name]),'danger',false,['combat']);
+         }
+     });
+ 
++    exileTick(w);
++    wildTick(w);
++
+     // Old grudges come due
+-    let today = global.stats.days || 0;
++    let now = today();
+     for (let i = w.grudges.length - 1; i >= 0; i--){
+-        if (today >= w.grudges[i].due){
++        if (now >= w.grudges[i].due){
+             let g = w.grudges.splice(i, 1)[0];
+-            w.named.push({ name: g.name, str: g.str, kind: 'rogue' });
++            w.named.push({ id: g.id, name: g.name, str: g.str, kind: 'rogue', former: g.former });
++            if (g.id !== undefined){ w.vets = w.vets.filter(v => v.id !== g.id); }
+             messageQueue(loc('sw_grudge',[g.name]),'danger',false,['combat']);
+         }
+     }
+@@ -437,25 +988,27 @@ function dailyTick(w){
+ // Combat hooks
+ // ---------------------------------------------------------------------------
+ 
++function pw(wr){ return wr.fp ? warriorVars.fullBonus : 1; }
++
+ export function warriorsArmyBonus(){
+-    let total = active().reduce((t, wr) => t + might(wr), 0);
++    let total = active().reduce((t, wr) => t + might(wr) * pw(wr), 0);
+     return total / warriorVars.armyDivisor;
+ }
+ 
+ export function warriorsHuntMult(){
+     let a = active();
+-    let sense = a.reduce((t, wr) => t + wr.stats.sns, 0) / warriorVars.senseDivisor;
+-    let quick = a.filter(wr => wr.perks.includes('quick_draw')).length * 0.1;
++    let sense = a.reduce((t, wr) => t + wr.stats.sns * pw(wr), 0) / warriorVars.senseDivisor;
++    let quick = a.reduce((t, wr) => t + (wr.perks.includes('quick_draw') ? 0.1 * pw(wr) : 0), 0);
+     return 1 + sense + quick;
+ }
+ 
+ export function warriorsLossMult(){
+-    let def = active().filter(wr => wr.perks.includes('defensive')).length * 0.25;
++    let def = active().reduce((t, wr) => t + (wr.perks.includes('defensive') ? 0.25 * pw(wr) : 0), 0);
+     return 1 - Math.min(0.75, def);
+ }
+ 
+ export function warriorsStressCut(){
+-    let will = active().reduce((t, wr) => t + wr.stats.wil, 0) / warriorVars.willDivisor;
++    let will = active().reduce((t, wr) => t + wr.stats.wil * pw(wr), 0) / warriorVars.willDivisor;
+     return Math.min(0.5, will);
+ }
+ 
+@@ -464,7 +1017,7 @@ export function warriorsStressAdd(){
+ }
+ 
+ export function warriorsCdMult(){
+-    let spd = active().reduce((t, wr) => t + wr.stats.spd, 0) / warriorVars.speedCdCut;
++    let spd = active().reduce((t, wr) => t + wr.stats.spd * pw(wr), 0) / warriorVars.speedCdCut;
+     return 1 - Math.min(0.5, spd);
+ }
+ 
+@@ -475,22 +1028,62 @@ function defyChance(wr){
+ }
+ 
+ // Called after any fight. kind: hunt | abyss | raid | campaign
+-export function warriorsBattle(kind, won){
++// info (optional): { target: named boss or 'generic', dmg: Abyssal damage, kill: Abyssal One slain }
++export function warriorsBattle(kind, won, info){
+     if (!yokiActive()){ return; }
+     let f = fights[kind];
+     if (!f){ return; }
+-    let w = warriorState();
+-    active().forEach(wr => {
++    info = info || {};
++    let fighters = active();
++
++    // Credit for the fight goes to everyone who was there.
++    if (fighters.length){
++        let totalMight = fighters.reduce((t, wr) => t + might(wr) * pw(wr), 0) || 1;
++        let blow = null;
++        if (info.kill){
++            let roll = Math.rand(0, 1000) / 1000 * totalMight;
++            blow = fighters.find(wr => (roll -= might(wr) * pw(wr)) <= 0) || fighters[fighters.length - 1];
++        }
++        fighters.forEach(wr => {
++            wr.rec.b[kind][won ? 0 : 1]++;
++            if (info.dmg){ wr.rec.ad += Math.round(info.dmg * might(wr) * pw(wr) / totalMight); }
++            if (blow && blow.id === wr.id){
++                wr.rec.ak++;
++                chron(wr, 'sw_ch_abyss_blow', [info.killName || '']);
++            }
++            if (won && info.target){
++                let t = info.target;
++                if (t === 'generic' || t.kind === 'wild' || t.kind === 'awakened'){ wr.rec.aw++; }
++                if (t !== 'generic'){
++                    wr.rec.ns++;
++                    if (t.kind === 'awakened' || t.kind === 'rogue'){
++                        wr.rec.fs++;
++                        chron(wr, 'sw_ch_slew_sister', [t.name]);
++                    }
++                    else {
++                        chron(wr, 'sw_ch_slew', [t.name]);
++                    }
++                }
++            }
++        });
++    }
++
++    fighters.forEach(wr => {
+         // Death check
+         let death = (won ? f[3] : f[4]) * (1.25 - wr.stats.spd / 200);
+         if (death > 0 && Math.rand(0, 10000) < death * 100){
+             if (Math.rand(0, 100) < defyChance(wr)){
+-                wr.meter += 20;
++                wr.meter += warriorVars.defyMeter;
++                wr.defied++;
++                wr.rec.dd++;
++                chron(wr, 'sw_ch_defied');
+                 messageQueue(loc('sw_defied',[wr.name]),'special',false,['combat']);
+             }
+             else {
+-                w.roster.splice(w.roster.findIndex(x => x.id === wr.id), 1);
++                removeFromRoster(wr);
++                chron(wr, 'sw_ch_fell');
+                 addHall(wr, 'fell');
++                comradeLost(wr);
+                 moraleHit(3, wr.id);
+                 messageQueue(loc('sw_fell',[wr.name]),'danger',false,['combat']);
+                 return;
+@@ -499,14 +1092,79 @@ export function warriorsBattle(kind, won){
+         wr.meter += f[0] * meterMult(wr);
+         changeLoyalty(wr, won ? 1 : -1);
+         gainXp(wr, won ? f[1] : f[2]);
+-        if (wr.meter >= 100){ awaken(wr); }
++        checkMeter(wr);
+     });
+ }
+ 
++// The rewritten Unbroken achievement: first space mission with 3+ warriors, none ever Awakened.
++export function unbrokenCheck(){
++    let w = global.race['warriors'];
++    return w && w.woke === 0 && w.roster.length >= 3;
++}
++
++// ---------------------------------------------------------------------------
++// Service record
++// ---------------------------------------------------------------------------
++
++function battlesOf(rec){
++    let won = 0, lost = 0;
++    battleKinds.forEach(k => { won += rec.b[k][0]; lost += rec.b[k][1]; });
++    return { won, lost, total: won + lost };
++}
++
++export function recordSummary(wr){
++    let rec = wr.rec;
++    if (!rec){ return ''; }
++    let b = battlesOf(rec);
++    return loc('sw_rec_summary',[rec.j === null ? '-' : rec.j, rec.sd, b.total, b.won, rec.aw, rec.dd]);
++}
++
++function esc(s){
++    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
++}
++
++// Full record as HTML for a warrior (roster, veteran) or a Hall entry.
++export function recordHtml(src, isHall){
++    let rec = src.rec;
++    let name = isHall ? src.n : src.name;
++    if (!rec){ return `<p>${loc('sw_rec_none')}</p>`; }
++    let stats = isHall ? src.s : src.stats;
++    let rank = isHall ? src.r : rankOf(src);
++    let lvl = isHall ? src.l : src.lvl;
++    let b = battlesOf(rec);
++    let row = (k, v) => `<tr><td class="has-text-label" style="padding:0.1rem 0.6rem 0.1rem 0">${k}</td><td style="padding:0.1rem 0">${v}</td></tr>`;
++    let html = `<div style="font-size:0.9rem"><table>`;
++    html += row(loc('sw_rec_rank'), loc('sw_rec_rank_v',[rank, rec.r0, rec.rb, lvl]));
++    html += row(loc('sw_rec_service'), loc('sw_rec_service_v',[rec.j === null ? '-' : rec.j, rec.sd, rec.st]));
++    html += row(loc('sw_rec_pay'), loc('sw_rec_pay_v',[sizeApproximation(rec.fee, 1), sizeApproximation(rec.wg, 1), rec.ud]));
++    html += row(loc('sw_rec_rest'), loc('sw_rec_rest_v',[rec.rd, rec.rn]));
++    html += row(loc('sw_rec_battles'), loc('sw_rec_battles_v',[b.total, b.won, b.lost]));
++    html += row('', battleKinds.filter(k => rec.b[k][0] + rec.b[k][1] > 0).map(k => `${loc(`wiki_warriors_fight_${k}`)} ${rec.b[k][0]}/${rec.b[k][1]}`).join(' · ') || '-');
++    html += row(loc('sw_rec_kills'), loc('sw_rec_kills_v',[rec.aw, rec.ns, rec.fs]));
++    if (rec.ad > 0 || rec.ak > 0){ html += row(loc('sw_rec_abyss'), loc('sw_rec_abyss_v',[Math.round(rec.ad).toLocaleString(), rec.ak])); }
++    html += row(loc('sw_rec_trials'), loc('sw_rec_trials_v',[rec.cl, rec.dd, rec.pm, rec.ll]));
++    if (stats && rec.s0){
++        html += row(loc('sw_rec_stats'), warriorVars.stats.map(s => `${loc(`sw_stat_${s}`).slice(0,3)} ${rec.s0[s]}→${stats[s]}`).join(' · '));
++    }
++    html += `</table>`;
++    let ch = isHall ? (src.ch || []) : (src.chron || []);
++    if (ch.length){
++        html += `<div class="has-text-warning" style="margin-top:0.5rem">${loc('sw_rec_chronicle')}</div>`;
++        html += ch.slice().reverse().map(c => `<div><span class="has-text-label">${loc('sw_rec_day',[c.d])}</span> ${esc(loc(c.k, c.a.map(a => esc(a))))}</div>`).join('');
++    }
++    html += `</div>`;
++    return `<div class="has-text-warning" style="font-size:1.1rem; margin-bottom:0.4rem">${esc(name)}</div>` + html;
++}
++
+ // ---------------------------------------------------------------------------
+ // UI (Civics → Military)
+ // ---------------------------------------------------------------------------
+ 
++function costText(cost){
++    let parts = Object.keys(cost).map(r => r === 'Money' ? `$${sizeApproximation(cost[r], 1)}` : `${sizeApproximation(cost[r], 1)} ${global.resource[r] ? global.resource[r].name : r}`);
++    return parts.length ? parts.join(', ') : loc('sw_seat_free');
++}
++
+ export function drawWarriors(){
+     let el = $('#silverWarriors');
+     if (el.length){ clearElement(el); el.remove(); }
+@@ -524,30 +1182,62 @@ export function drawWarriors(){
+         </div>`).join('');
+ 
+     let perkChips = (src) => `<span v-for="p in ${src}.perks" :key="p" :title="perkDesc(p)" :class="perkClass(p)" style="margin-right:0.5rem; font-size:0.85rem;">{{ perkName(p) }}</span>`;
++    let box = 'border:1px solid rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem; max-width:100%;';
+ 
+     panel.append(`
+-        <h2 class="has-text-warning">${loc('sw_title')} <span class="has-text-label" style="font-size:0.9rem">({{ w.roster.length }} / {{ slots() }})</span></h2>
++        <h2 class="has-text-warning">${loc('sw_title')} <span class="has-text-label" style="font-size:0.9rem">({{ w.roster.length }} / {{ seats() }})</span></h2>
+         <div class="has-text-label" style="font-size:0.85rem; margin-bottom:0.5rem">${loc('sw_intro')}</div>
+ 
++        <div style="font-size:0.85rem; margin-bottom:0.5rem">
++            <div v-if="next()">
++                <span class="has-text-warning">${loc('sw_seat')} {{ next().n }}:</span>
++                <span :class="next().ready ? 'has-text-success' : 'has-text-danger'">{{ seatReq(next().req) }}</span>
++                · {{ seatCost(next().cost) }}
++                <button class="button is-small" style="margin-left:0.3rem" :disabled="!next().ready || !canPay(next().cost)" @click="commission()">${loc('sw_seat_buy')}</button>
++            </div>
++            <div v-else class="has-text-label">${loc('sw_seat_all')}</div>
++            <div>${loc('sw_handlers')}: {{ hUsed() }} / {{ hCount() }}<span v-if="tCap() > 0"> · ${loc('sw_tonic')}: {{ Math.floor(w.tonic) }} / {{ tCap() }}</span></div>
++        </div>
++
+         <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+-            <div v-for="wr in w.roster" :key="wr.id" style="border:1px solid rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem;">
++            <div v-for="wr in w.roster" :key="wr.id" :style="'${box}' + (wr.fp ? ' border-color:#c33;' : '')">
+                 <div style="display:flex; justify-content:space-between">
+-                    <span><b class="has-text-warning">{{ wr.name }}</b> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
++                    <span><a class="has-text-warning" style="font-weight:bold" :title="summary(wr)" @click="showRecord(wr)">{{ wr.name }}</a> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
+                     <span>${loc('sw_level')} {{ wr.lvl }} <span class="has-text-label" style="font-size:0.8rem">({{ wr.xp }}/${warriorVars.xpPerLevel})</span></span>
+                 </div>
+                 <div style="font-size:0.85rem">
+                     <span :class="wr.status === 'active' ? 'has-text-success' : 'has-text-caution'">{{ wr.status === 'active' ? '${loc('sw_active')}' : '${loc('sw_resting')}' }}</span>
+                     · {{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}
++                    <span v-if="wr.fp" class="has-text-danger"> · ${loc('sw_full')}</span>
+                 </div>
+                 ${statRow('wr')}
+                 <div>${perkChips('wr')}</div>
+                 <div style="font-size:0.85rem">${loc('sw_loyalty')}: <span :class="loyClass(wr)">{{ Math.round(wr.loyalty) }} ({{ mood(wr) }})</span></div>
+-                <div style="font-size:0.85rem">${loc('sw_meter')}: <span :class="wr.meter >= 75 ? 'has-text-danger' : 'has-text-warning'">{{ Math.floor(wr.meter) }}%</span></div>
+-                <div style="font-size:0.85rem">${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}<span v-if="wr.unpaid > 0" class="has-text-danger"> (${loc('sw_unpaid_short')} {{ wr.unpaid }})</span></div>
+-                <div style="margin-top:0.4rem; display:flex; gap:0.3rem;">
++                <div style="font-size:0.85rem">${loc('sw_meter')}: <span :class="meterClass(wr)">{{ Math.floor(wr.meter) }}</span>
++                    <span v-if="stage(wr) > 0" :class="meterClass(wr)"> · {{ warnText(wr) }}</span>
++                    <span v-if="atFloor(wr)" class="has-text-label"> · ${loc('sw_at_floor')}</span>
++                </div>
++                <div style="font-size:0.85rem">${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}<span v-if="wr.unpaid > 0" class="has-text-danger"> (${loc('sw_unpaid_short')} {{ wr.unpaid }})</span>
++                    <span v-if="wr.hd" class="has-text-success"> · ${loc('sw_handler_on')}</span></div>
++                <div v-if="wr.card" style="margin-top:0.4rem; border:1px solid #c33; border-radius:4px; padding:0.4rem; font-size:0.85rem;">
++                    <div class="has-text-danger">${loc('sw_card_title')}</div>
++                    <div>${loc('sw_card_text')}</div>
++                    <div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.3rem;">
++                        <button class="button is-small" title="${loc('sw_card_honour_tip')}" @click="card(wr.id,'honour')">${loc('sw_card_honour')}</button>
++                        <button class="button is-small" :disabled="w.tonic < 1" title="${loc('sw_card_tonic_tip',[warriorVars.tonicFail])}" @click="card(wr.id,'tonic')">${loc('sw_card_tonic')}</button>
++                        <button class="button is-small" title="${loc('sw_card_rest_tip',[warriorVars.restSaveRisk])}" @click="card(wr.id,'rest')">${loc('sw_card_rest')}</button>
++                        <button class="button is-small" title="${loc('sw_card_ignore_tip')}" @click="card(wr.id,'ignore')">${loc('sw_card_ignore')}</button>
++                    </div>
++                </div>
++                <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.3rem;">
+                     <button class="button is-small" :disabled="wr.cd > 0" @click="rest(wr.id)">{{ wr.cd > 0 ? wr.cd + 's' : (wr.status === 'active' ? '${loc('sw_rest')}' : '${loc('sw_activate')}') }}</button>
++                    <button class="button is-small" :class="wr.fp ? 'is-danger' : ''" :disabled="wr.status !== 'active'" title="${loc('sw_full_tip',[warriorVars.fullBonus, warriorVars.fullMeter])}" @click="full(wr.id)">${loc('sw_full_btn')}</button>
++                    <button class="button is-small" :disabled="!wr.hd && hUsed() >= hCount()" title="${loc('sw_handler_tip',[warriorVars.handlerCut * 100])}" @click="handler(wr.id)">{{ wr.hd ? '${loc('sw_handler_off')}' : '${loc('sw_handler_btn')}' }}</button>
++                    <button v-if="tCap() > 0" class="button is-small" :disabled="w.tonic < 1" title="${loc('sw_tonic_tip',[warriorVars.tonicCut])}" @click="tonic(wr.id)">${loc('sw_tonic_btn')}</button>
++                    <button class="button is-small" @click="showRecord(wr)">${loc('sw_record')}</button>
+                     <button class="button is-small" @click="renameW(wr)">${loc('sw_rename')}</button>
+                     <button class="button is-small" @click="retireW(wr)">${loc('sw_retire')}</button>
++                    <button class="button is-small" @click="dismissW(wr)">${loc('sw_dismiss')}</button>
+                 </div>
+             </div>
+         </div>
+@@ -557,7 +1247,8 @@ export function drawWarriors(){
+             <button class="button is-small" style="margin-left:0.5rem" @click="refresh()">${loc('sw_refresh')} (\${{ money(refreshCost()) }})</button>
+         </h3>
+         <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+-            <div v-for="wr in w.pool" :key="wr.id" style="border:1px dashed rgba(128,128,128,0.4); border-radius:4px; padding:0.5rem; width:18rem;">
++            <div v-for="wr in w.pool" :key="wr.id" style="${box} border-style:dashed;">
++                <div v-if="wr.returning" class="has-text-success" style="font-size:0.85rem">${loc('sw_former')} ({{ moodName(wr.mood) }})</div>
+                 <div style="display:flex; justify-content:space-between">
+                     <span><b>{{ wr.name }}</b> <span class="has-text-label">No. {{ rank(wr) }}</span></span>
+                     <span>${loc('sw_level')} {{ wr.lvl }}</span>
+@@ -565,15 +1256,26 @@ export function drawWarriors(){
+                 <div style="font-size:0.85rem">{{ temperName(wr.temper) }} · ${loc('sw_potential')} {{ pot(wr) }}</div>
+                 ${statRow('wr')}
+                 <div>${perkChips('wr')}</div>
+-                <div style="font-size:0.85rem">${loc('sw_fee')}: \${{ money(wr.fee) }} · ${loc('sw_wage')}: \${{ money(wr.wage) }} ${loc('sw_per_day')}</div>
+-                <button class="button is-small" style="margin-top:0.4rem" :disabled="w.roster.length >= slots() || !afford(wr.fee)" @click="hireW(wr.id)">${loc('sw_hire')}</button>
++                <div style="font-size:0.85rem">${loc('sw_fee')}: \${{ money(wr.fee) }} · ${loc('sw_wage')}: \${{ money(wage(wr)) }} ${loc('sw_per_day')}</div>
++                <div style="margin-top:0.4rem; display:flex; gap:0.3rem;">
++                    <button class="button is-small" :disabled="w.roster.length >= seats() || !afford(wr.fee)" @click="hireW(wr.id)">${loc('sw_hire')}</button>
++                    <button v-if="wr.returning" class="button is-small" @click="showRecord(wr)">${loc('sw_record')}</button>
++                </div>
++            </div>
++        </div>
++
++        <div v-if="w.vets.length" style="margin-top:1rem">
++            <h3 class="has-text-warning">${loc('sw_vets')}</h3>
++            <div v-for="v in w.vets" :key="v.id" style="font-size:0.85rem">
++                <a class="has-text-warning" @click="showRecord(v)">{{ v.name }}</a> (No. {{ rank(v) }}, ${loc('sw_level')} {{ v.lvl }}):
++                {{ howName(v.how) }}, <span :class="moodClass(v.mood)">{{ moodName(v.mood) }}</span>, ${loc('sw_vet_away')} {{ away(v) }} ${loc('sw_days')}<span v-if="v.rise" class="has-text-danger"> · ${loc('sw_vet_restless')}</span>
+             </div>
+         </div>
+ 
+         <div v-if="hallList().length" style="margin-top:1rem">
+             <h3 class="has-text-warning">${loc('sw_hall')}</h3>
+             <div v-for="(h, i) in hallList()" :key="i" style="font-size:0.85rem">
+-                <b>{{ h.n }}</b><span v-if="h.l"> (No. {{ h.r }}, ${loc('sw_level')} {{ h.l }})</span>: {{ fate(h.f) }}
++                <a v-if="h.rec" @click="showHall(h)"><b>{{ h.n }}</b></a><b v-else>{{ h.n }}</b><span v-if="h.l"> (No. {{ h.r }}, ${loc('sw_level')} {{ h.l }})</span>: {{ fate(h.f) }}
+             </div>
+         </div>
+     `);
+@@ -582,10 +1284,19 @@ export function drawWarriors(){
+         el: '#silverWarriors',
+         data: { w: w },
+         methods: {
+-            unlocked(){ return yokiActive() && slots() > 0; },
+-            slots(){ return slots(); },
++            unlocked(){ return yokiActive() && (seats() > 0 || orgCount() > 0); },
++            seats(){ return seats(); },
++            next(){ return nextSeat(); },
++            seatReq(r){ return loc(`sw_seat_req_${r}`); },
++            seatCost(c){ return costText(c); },
++            canPay(c){ return canPay(c); },
++            commission(){ commissionSeat(); },
++            hCount(){ return handlerCount(); },
++            hUsed(){ return handlersUsed(); },
++            tCap(){ return tonicCap(); },
+             rank(wr){ return rankOf(wr); },
+             pot(wr){ return potential(wr); },
++            wage(wr){ return baseWage(wr); },
+             money(v){ return sizeApproximation(v, 1); },
+             afford(v){ return global.resource.Money.amount >= v; },
+             perkName(p){ return loc(`sw_perk_${p}`); },
+@@ -593,13 +1304,32 @@ export function drawWarriors(){
+             perkClass(p){ return perkList[p] && perkList[p].good ? 'has-text-success' : 'has-text-danger'; },
+             temperName(t){ return loc(`sw_temper_${t}`); },
+             mood(wr){ return wr.loyalty >= 75 ? loc('sw_mood_devoted') : wr.loyalty >= 50 ? loc('sw_mood_content') : wr.loyalty >= 25 ? loc('sw_mood_uneasy') : loc('sw_mood_resentful'); },
++            moodName(m){ return loc(`sw_mood_${m}`); },
++            moodClass(m){ return m === 'grateful' ? 'has-text-success' : m === 'neutral' ? 'has-text-warning' : 'has-text-danger'; },
++            howName(h){ return loc(`sw_fate_${h}`); },
++            away(v){ return today() - v.left; },
+             loyClass(wr){ return wr.loyalty >= 50 ? 'has-text-success' : wr.loyalty >= 25 ? 'has-text-warning' : 'has-text-danger'; },
++            stage(wr){ return stageOf(wr); },
++            warnText(wr){ return loc(`sw_warn_short_${stageOf(wr)}`); },
++            meterClass(wr){ let s = stageOf(wr); return s >= 2 ? 'has-text-danger' : s === 1 ? 'has-text-caution' : 'has-text-warning'; },
++            atFloor(wr){ return wr.status === 'resting' && wr.meter > 0 && wr.meter <= floorOf(wr) + 0.01; },
++            summary(wr){ return recordSummary(wr); },
+             fate(f){ return loc(`sw_fate_${f}`); },
+             hallList(){ return hall().slice(0, 15); },
+             refreshCost(){ return refreshCost(); },
+             refresh(){ refreshPool(true); },
+             hireW(id){ hire(id); },
+             rest(id){ toggleRest(id); },
++            full(id){ toggleFull(id); },
++            handler(id){ toggleHandler(id); },
++            tonic(id){ useTonic(id); },
++            card(id, c){ blackCard(id, c); },
++            showRecord(wr){
++                this.$buefy.dialog.alert({ message: recordHtml(wr, false), confirmText: loc('sw_close'), canCancel: ['escape','outside'] });
++            },
++            showHall(h){
++                this.$buefy.dialog.alert({ message: recordHtml(h, true), confirmText: loc('sw_close'), canCancel: ['escape','outside'] });
++            },
+             renameW(wr){
+                 this.$buefy.dialog.prompt({
+                     message: loc('sw_rename_prompt'),
+@@ -609,11 +1339,22 @@ export function drawWarriors(){
+                 });
+             },
+             retireW(wr){
++                let cost = retireCost(wr);
++                let msg = loc('sw_retire_confirm',[wr.name, sizeApproximation(severance(wr), 1), sizeApproximation(backPay(wr), 1), sizeApproximation(cost, 1), loc(`sw_mood_${partingMood(wr,'retired')}`)]);
++                if (global.resource.Money.amount < cost){ msg += `<br><span class="has-text-danger">${loc('sw_retire_poor')}</span>`; }
+                 this.$buefy.dialog.confirm({
+-                    message: loc('sw_retire_confirm',[wr.name]),
++                    message: msg,
+                     confirmText: loc('sw_retire'),
+                     onConfirm: () => retire(wr.id)
+                 });
++            },
++            dismissW(wr){
++                this.$buefy.dialog.confirm({
++                    message: loc('sw_dismiss_confirm',[wr.name, Math.round(dismissHit(wr) * 10) / 10, loc(`sw_mood_${partingMood(wr,'dismissed')}`)]),
++                    confirmText: loc('sw_dismiss'),
++                    type: 'is-danger',
++                    onConfirm: () => dismiss(wr.id)
++                });
+             }
+         }
+     });
+diff --git a/src/wiki/change.js b/src/wiki/change.js
+index 4627559a..4eda45d5 100644
+--- a/src/wiki/change.js
++++ b/src/wiki/change.js
+@@ -2,6 +2,21 @@ import {} from './../vars.js';
+ import { clearElement } from './../functions.js';
+ 
+ export const changeList = [
++    { // Fan expansion (not part of the official game)
++        version: `1.4.10`,
++        revision: ` Silverblood Expansion v1.2 (part 1)`,
++        date: `11/27/2026`,
++        changes: [
++            `Awakening rework: garrison soldiers no longer fill a global meter. Only named warriors can Awaken, each at her own hidden breaking point, with warnings as she nears it.`,
++            `Rest can no longer fully calm a veteran warrior: her floor rises with level and with every death she defied.`,
++            `New: Full Power, the Black Card, per-warrior Handlers, the Silent Hall and the Apothecary (Stillwater Tonic).`,
++            `Wild Awakened Ones now roam the land, more often in later eras, on Monster-infested planets, and as your warriors grow famous.`,
++            `Warrior Seats: commission up to 8 Seats as your civilization reaches milestones. They no longer depend on the number of Organizations.`,
++            `Service records and chronicles for every warrior, kept in the Hall of the Fallen.`,
++            `Retire with severance or dismiss. Veterans may return, seek revenge, or Awaken in exile.`,
++            `Unbroken now asks for your first space mission with at least 3 warriors and none ever Awakened.`
++        ]
++    },
+     { // Fan expansion (not part of the official game)
+         version: `1.4.10`,
+         revision: ` Silverblood Expansion v1.1`,
+diff --git a/src/wiki/structures.js b/src/wiki/structures.js
+index 9f7f6766..3a2acf71 100644
+--- a/src/wiki/structures.js
++++ b/src/wiki/structures.js
+@@ -42,6 +42,8 @@ const extraInformation = {
+     planetary: {
+         slaughter: [loc(`wiki_structure_planetary_slaughter`)],
+         organization: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_organization`)],
++        silent_hall: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_silent_hall`)],
++        apothecary: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_apothecary`)],
+         hunt_awakened: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_hunt_awakened`)],
+         abyss_hunt: [loc(`wiki_structure_planetary_silverblood_only`), loc(`wiki_structure_planetary_abyss_hunt`), loc(`wiki_structure_planetary_abyss_hunt_list`)],
+     },
+diff --git a/src/wiki/warriors.js b/src/wiki/warriors.js
+index 9bac2721..a09a09d1 100644
+--- a/src/wiki/warriors.js
++++ b/src/wiki/warriors.js
+@@ -3,7 +3,8 @@
+ 
+ import { loc } from './../locale.js';
+ import { sideMenu, infoBoxBuilder } from './functions.js';
+-import { warriorVars, fights, perkList, temperaments } from './../warriors.js';
++import { warriorVars, fights, perkList, temperaments, seatList, wildVars } from './../warriors.js';
++import { yokiVars } from './../silverblood.js';
+ 
+ function table(rows, head){
+     const cell = 'color:inherit; border-color:rgba(128,128,128,0.35); padding:0.25rem 0.5rem;';
+@@ -28,9 +29,17 @@ export function warriorsPage(content){
+ 
+     section(main,'overview',3,{
+         1: [loc('race_silverblood'), loc('city_organization')],
+-        2: [warriorVars.maxSlots],
+     });
+ 
++    let seat = section(main,'seats',2,{
++        1: [warriorVars.maxSlots],
++    });
++    seat.append(table(seatList.map((st, i) => [
++        i + 1,
++        loc(`sw_seat_req_${st.req}`),
++        Object.keys(st.cost).map(r => r === 'Money' ? `$${st.cost[r].toLocaleString()}` : `${st.cost[r].toLocaleString()} ${loc(`resource_${r}_name`)}`).join(', ') || loc('sw_seat_free')
++    ]), [loc('sw_seat'), loc('wiki_warriors_seat_req'), loc('wiki_warriors_seat_cost')]));
++
+     section(main,'recruiting',4,{
+         1: [warriorVars.poolSize, warriorVars.poolRefreshDays],
+         2: [`${warriorVars.refreshCostPct * 100}%`],
+@@ -76,16 +85,49 @@ export function warriorsPage(content){
+     });
+ 
+     section(main,'resting',2,{
+-        1: [`${warriorVars.restDecay}%`],
++        1: [warriorVars.restDecay],
+         2: [`${warriorVars.restCooldown}`]
+     });
+ 
+-    let meter = section(main,'awakening',3,{
+-        1: [`${warriorVars.activeGain}%`],
+-        2: ['1.5 - Control / 100']
++    let meter = section(main,'awakening',4,{
++        1: [warriorVars.activeGain],
++        2: [warriorVars.breakMin, warriorVars.breakMax],
++        3: ['1.5 - Control / 100'],
+     });
+-    meter.append(table(Object.keys(fights).map(k => [loc(`wiki_warriors_fight_${k}`), `+${fights[k][0]}%`]),
++    meter.append(table(Object.keys(fights).map(k => [loc(`wiki_warriors_fight_${k}`), `+${fights[k][0]}`]),
+         [loc('wiki_warriors_fight'), loc('wiki_warriors_meter_gain')]));
++    meter.append(table(warriorVars.warn.map((v, i) => [`${Math.round(v * 100)}%`, loc(`sw_warn_short_${i + 1}`), loc(`wiki_warriors_warn_${i + 1}`)]),
++        [loc('wiki_warriors_warn_at'), loc('wiki_warriors_warn'), loc('wiki_warriors_effect')]));
++
++    section(main,'floor',2,{
++        1: [`${warriorVars.floorLevel * 100}%`, `${warriorVars.floorDefy * 100}%`, `${warriorVars.floorCap * 100}%`],
++        2: [`${warriorVars.floorHallCut * 100}%`, `${warriorVars.floorCapMin * 100}%`],
++    });
++
++    section(main,'full',1,{
++        1: [warriorVars.fullBonus, warriorVars.fullMeter],
++    });
++
++    section(main,'card',3,{
++        2: [warriorVars.cardLoyalty, warriorVars.tonicFail + '%', warriorVars.restSaveRisk + '%'],
++        3: [warriorVars.cardLoyalty],
++    });
++
++    let calm = section(main,'calming',1);
++    calm.append(table([
++        [loc('job_handler'), loc('wiki_warriors_calm_handler',[warriorVars.handlerCut * 100])],
++        [loc('city_organization'), loc('wiki_warriors_calm_org',[warriorVars.orgCalm * 100, warriorVars.orgCalmMax * 100])],
++        [loc('city_silent_hall'), loc('wiki_warriors_calm_hall',[warriorVars.hallRest * 100, warriorVars.hallRestMax * 100, warriorVars.floorHallCut * 100, yokiVars.hallUpkeep])],
++        [loc('city_apothecary'), loc('wiki_warriors_calm_apoth',[warriorVars.tonicDays, warriorVars.tonicCut, warriorVars.tonicBase])],
++        [loc('trait_yoki_power_name'), loc('wiki_warriors_calm_abyss')],
++    ]));
++
++    let wild = section(main,'wild',3,{
++        2: [`${wildVars.infested}x`, wildVars.fameLevels, `${1 + wildVars.fameMax}x`],
++        3: [wildVars.max],
++    });
++    wild.append(table(wildVars.era.map(e => [loc(`wiki_warriors_era_${e[0]}`), loc('wiki_warriors_era_days',[e[1], Math.round(e[1] * 5 / 60)])]),
++        [loc('wiki_warriors_era'), loc('wiki_warriors_era_freq')]));
+ 
+     let death = section(main,'death',3,{
+         1: ['1.25 - Speed / 200'],
+@@ -95,8 +137,19 @@ export function warriorsPage(content){
+     death.append(table(Object.keys(fights).map(k => [loc(`wiki_warriors_fight_${k}`), `${fights[k][3]}%`, `${fights[k][4]}%`]),
+         [loc('wiki_warriors_fight'), loc('wiki_warriors_death_win'), loc('wiki_warriors_death_loss')]));
+ 
++    section(main,'record',2,{
++        2: [warriorVars.chronMax],
++    });
++
++    section(main,'leaving',5,{
++        1: [`${warriorVars.sevBase} + ${loc('wiki_warriors_days_served')} / ${warriorVars.sevDiv}`],
++        2: [`${warriorVars.dismissBase} + ${loc('wiki_warriors_days_served')} / ${warriorVars.dismissDiv}`, warriorVars.dismissMax],
++        4: [warriorVars.vetMin, `${warriorVars.vetChance}%`],
++        5: [`${warriorVars.exileRiseAt * 100}%`],
++    });
++
+     section(main,'betrayal',4,{
+-        2: ['(40 - Loyalty) x 2.5%', '60-200'],
++        2: ['50%', '60-200'],
+         3: ['30%', '60%', '30-90'],
+         4: ['1.2x']
+     });
+diff --git a/strings/strings.json b/strings/strings.json
+index cf2ca99d..5ae6911f 100644
+--- a/strings/strings.json
++++ b/strings/strings.json
+@@ -11656,7 +11656,7 @@
+   "trait_yoki_power": "Your warriors draw on demonic power in battle, but the more they fight, the closer they come to Awakening.",
+   "trait_outcast_name": "Outcast",
+   "trait_outcast": "Your citizens fear the warriors that protect them.",
+-  "wiki_trait_effect_yoki_power": "Combat rating increased by %0%. Soldiers build up the Awakening meter at %1% speed.",
++  "wiki_trait_effect_yoki_power": "Combat rating increased by %0%. Warriors' Awakening meters fill at %1% speed.",
+   "wiki_trait_effect_outcast": "Stress from your army is increased by %0%.",
+   "mods_title": "Mod Packs (Workshop)",
+   "mods_load": "Install Mod Pack",
+@@ -11665,25 +11665,20 @@
+   "mods_installed": "Installed mod packs: %0",
+   "mods_error": "Could not install %0: %1",
+   "mods_in_use": "Can't remove mods while playing a modded race (%0).",
+-  "yoki_meter": "Awakening",
+   "yoki_boss_count": "Awakened Ones at large: %0.",
+-  "yoki_meter_tooltip": "Soldiers: %0/s, Organization and Handlers: %1/s, Net: %2/s. At 100% a warrior Awakens into a monster.",
+-  "yoki_awaken": "A warrior has lost control of her demonic power and Awakened! Awakened Ones at large: %0. Hunt them down before they kill more soldiers.",
+-  "yoki_awaken_overrun": "Another warrior Awakened and fled to join the monsters already at large, killing %0 soldiers on her way out.",
+   "yoki_rampage": "An Awakened One ambushed a patrol and killed a soldier.",
+   "yoki_hunt_nosoldiers": "You have no healthy soldiers to send on the hunt.",
+   "yoki_hunt_win": "The hunt succeeded and an Awakened One was slain. %0 soldiers were killed and %1 were wounded. The bounty paid $%2.",
+   "yoki_hunt_loss": "The hunt failed! %0 soldiers were killed and %1 were wounded, but the Awakened One is weakened.",
+   "city_organization": "The Organization",
+   "city_organization_desc": "A secretive order that trains, watches over and, when necessary, puts down your warriors.",
+-  "city_organization_effect": "Reduces the Awakening meter by %0% per second.",
+-  "city_organization_effect2": "Awakening: %0% (%1% per second)",
++  "city_organization_effect": "All warriors' Awakening meters fill %0% slower (up to %1%).",
+   "city_hunt_awakened": "Hunt the Awakened",
+   "city_hunt_awakened_desc": "Send your garrison after an Awakened One.",
+   "city_hunt_awakened_effect": "Awakened Ones at large: %0. Each one kills soldiers and increases stress.",
+   "city_hunt_awakened_effect2": "Monster strength: %0. Your army rating: %1.",
+   "job_handler": "Handler",
+-  "job_handler_desc": "Handlers watch over your warriors and reduce the Awakening meter by 0.06% per second each.",
++  "job_handler_desc": "Handlers watch over your warriors. Assign a Handler to a warrior in Civics, Military to slow her Awakening meter.",
+   "planet_infested": "Monster-infested",
+   "planet_infested_desc": "Demons roam the wilds of this planet and raid your settlements. Survivors grow hard.",
+   "planet_infested_bd": "Monster-infested",
+@@ -11701,7 +11696,7 @@
+   "achieve_silver_hunter_desc": "Slay 50 Awakened Ones across all your Silverblood civilizations.",
+   "achieve_silver_hunter_flair": "Mercy is a blade, too",
+   "achieve_unbroken_name": "Unbroken",
+-  "achieve_unbroken_desc": "Launch your first space mission as Silverblood without a single warrior Awakening.",
++  "achieve_unbroken_desc": "Launch your first space mission as Silverblood with at least 3 warriors, and none of your warriors ever Awakened.",
+   "achieve_unbroken_flair": "Steel holds",
+   "achieve_abyss_walker_name": "Abyss Walker",
+   "achieve_abyss_walker_desc": "Slay an Abyssal One.",
+@@ -11729,14 +11724,14 @@
+   "abyssal_4_desc": "The demon whose blood made the Silverbloods. All Awakening leads back to it.",
+   "city_abyss_hunt_generic": "Hunt the Abyssal Ones",
+   "wiki_structure_planetary_silverblood_only": "Only available to races with the Demon Power trait (Silverblood).",
+-  "wiki_structure_planetary_organization": "Each Organization lowers the Awakening meter by 0.03% per second and allows one Handler. Each Handler lowers it by a further 0.06% per second. Each Organization also adds one warrior slot (up to 8) in Civics, Military.",
+-  "wiki_structure_planetary_hunt_awakened": "Appears while an Awakened One is at large. Your army rating (with 80% to 120% luck) is compared to the monster's strength. Win: the monster dies and pays a bounty (doubled on Monster-infested planets). Lose: you lose soldiers, but the monster is 20% weaker for the next attempt.",
++  "wiki_structure_planetary_organization": "Each Organization makes every warrior's Awakening meter fill 2% slower (up to 20%) and allows one Handler. The first Organization also opens the first warrior Seat in Civics, Military.",
++  "wiki_structure_planetary_hunt_awakened": "Appears while an Awakened One is at large: an Awakened warrior, a warrior with a grudge, or a wild Awakened One. Your army rating (with 80% to 120% luck) is compared to the monster's strength. Win: the monster dies and pays a bounty (doubled on Monster-infested planets). Lose: you lose soldiers, but the monster is 20% weaker for the next attempt.",
+   "wiki_structure_planetary_abyss_hunt": "Unlocked once you build a fortress in Hell. Each expedition deals damage equal to your army rating (with luck) and costs a share of your soldiers. Your army needs 60 seconds to regroup between expeditions. Each Abyssal One slain gives +5% combat rating and 10% slower Awakening for the rest of the run, and fills your treasury.",
+   "wiki_structure_planetary_abyss_hunt_list": "The Abyssal Ones, in order: Morvaine, the Hollow King (4,000 health); Seskari of the Drowned Deep (9,000); The Pale Wolf of Ironwood (18,000); Vethra, the Weeping Spire (36,000); Ul-Abyss, the First Dark (75,000).",
+-  "wiki_trait_effect_yoki_power_ex1": "Soldiers slowly fill the Awakening meter (wounded soldiers faster, and each offensive campaign adds 4%). At 100% a warrior Awakens into a monster that kills soldiers and adds stress until it is hunted down. Up to 3 can be at large at once.",
+-  "wiki_trait_effect_yoki_power_ex2": "The Organization building and the Handler job hold the meter back. After building a fortress in Hell, you can hunt the five Abyssal Ones.",
++  "wiki_trait_effect_yoki_power_ex1": "Garrison soldiers are human. Only named warriors of the Organization can Awaken, each at her own hidden breaking point. An Awakened warrior becomes a monster that kills soldiers and adds stress until she is hunted down.",
++  "wiki_trait_effect_yoki_power_ex2": "The Organization, Handlers, the Silent Hall and the Apothecary help keep warriors stable. Wild Awakened Ones also roam the land. After building a fortress in Hell, you can hunt the five Abyssal Ones.",
+   "sw_title": "Warriors of the Organization",
+-  "sw_intro": "Elite warriors with their own stats, perks and moods. Active warriors boost your army and join every hunt. Each one has a personal Awakening meter. Resting lowers it, but a resting warrior gives no bonuses and is still paid.",
++  "sw_intro": "Elite warriors with their own stats, perks and moods. Only they can Awaken. Each has a personal meter and a hidden breaking point, with warnings as she nears it. Resting lowers the meter, but a resting warrior gives no bonuses and is still paid.",
+   "sw_level": "Lv",
+   "sw_active": "Active",
+   "sw_resting": "Resting",
+@@ -11752,7 +11747,7 @@
+   "sw_rename": "Rename",
+   "sw_rename_prompt": "New name for this warrior:",
+   "sw_retire": "Retire",
+-  "sw_retire_confirm": "Retire %0 from service? Warriors who leave unhappy may hold a grudge.",
++  "sw_retire_confirm": "Retire %0 with honour? Severance: $%1. Back pay: $%2. Total: $%3. She would leave %4.",
+   "sw_recruits": "Recruits",
+   "sw_refresh_in": "New recruits in",
+   "sw_days": "days",
+@@ -11806,10 +11801,10 @@
+   "sw_levelup": "%0 reached level %1: %2.",
+   "sw_levelup_none": "no stats improved",
+   "sw_unpaid": "%0 was not paid today. Her loyalty is falling.",
+-  "sw_retired": "%0 has retired from service.",
++  "sw_retired": "%0 has retired from service. She left %1.",
+   "sw_deserted": "%0 has deserted the Organization!",
+   "sw_grudge": "%0 has returned, and she remembers how she was treated. She now hunts your soldiers.",
+-  "sw_awakened": "%0 has lost control and Awakened! She now hunts your soldiers.",
++  "sw_awakened": "%0 has crossed her limit and Awakened! She now hunts your soldiers.",
+   "sw_defied": "%0 should have died, but refused to fall. Her Awakening meter surged.",
+   "sw_fell": "%0 has fallen in battle.",
+   "sw_hunt_target_named": "Target: %0, an Awakened warrior.",
+@@ -11821,8 +11816,8 @@
+   "wiki_warriors_fan": "Silverblood Expansion content. Not part of the official game.",
+   "wiki_warriors_overview": "Overview",
+   "wiki_warriors_overview_para1": "Warriors are named elite fighters available to %0 civilizations. They unlock once you build %1.",
+-  "wiki_warriors_overview_para2": "Each Organization adds one roster slot, up to %0. Recruiting and managing warriors is done in Civics, Military.",
+-  "wiki_warriors_overview_para3": "Active warriors boost your army and fight in every hunt, demon raid, offensive campaign and Abyssal expedition. Each one is randomly generated, so no two rosters are the same.",
++  "wiki_warriors_overview_para2": "Warriors sit in Seats. You start with one Seat and commission more as your civilization grows (see below). Recruiting and managing warriors is done in Civics, Military.",
++  "wiki_warriors_overview_para3": "Active warriors boost your army and fight in every hunt, demon raid, offensive campaign and Abyssal expedition. Each one is randomly generated, so no two rosters are the same. Garrison soldiers are human: only these warriors can Awaken.",
+   "wiki_warriors_recruiting": "Recruiting and Wages",
+   "wiki_warriors_recruiting_para1": "%0 recruits are offered at a time. A new set arrives every %1 days.",
+   "wiki_warriors_recruiting_para2": "You can pay to find new recruits right away. It costs %0 of the current recruits' average fee.",
+@@ -11865,12 +11860,12 @@
+   "wiki_warriors_loyalty_para2": "Her mood shows her loyalty: devoted (%0+), content (%1+), uneasy (%2+) or resentful.",
+   "wiki_warriors_loyalty_para3": "A warrior with loyalty under %0, or under %1 after three unpaid days, has a %2 chance each day to desert.",
+   "wiki_warriors_resting": "Resting",
+-  "wiki_warriors_resting_para1": "A resting warrior gives no bonuses and does not fight, but she is still paid. Her personal Awakening meter falls by %0 per day.",
++  "wiki_warriors_resting_para1": "A resting warrior gives no bonuses and does not fight, but she is still paid. Her Awakening meter falls by %0 per day, faster with Silent Halls, but never below her floor (see below).",
+   "wiki_warriors_resting_para2": "After switching a warrior between active and resting, you must wait %0 seconds before switching her again.",
+-  "wiki_warriors_awakening": "Personal Awakening",
++  "wiki_warriors_awakening": "Awakening",
+   "wiki_warriors_awakening_para1": "Each warrior has her own Awakening meter. While active it rises by %0 per day, and more with every battle she fights.",
+-  "wiki_warriors_awakening_para2": "All gains are multiplied by %0, so high Control keeps her stable. Hot-headed doubles the gain and Iron Control reduces it by 40%.",
+-  "wiki_warriors_awakening_para3": "At 100% she Awakens. She leaves your roster and becomes a named monster, about twice as strong as a normal Awakened One, that kills soldiers until you defeat her with Hunt the Awakened.",
++  "wiki_warriors_awakening_para2": "Each warrior also has a hidden breaking point, rolled when she is recruited: the average of two rolls between %0 and %1. When her meter reaches it she Awakens. She leaves your roster and becomes a named monster that kills soldiers until you defeat her with Hunt the Awakened.",
++  "wiki_warriors_awakening_para3": "All gains are multiplied by %0. Hot-headed doubles the gain, Iron Control cuts it by 40%, and Demon Power's rank changes it too. Handlers, Organizations and Full Power also change it (see below).",
+   "wiki_warriors_meter_gain": "Meter gain (before Control)",
+   "wiki_warriors_death": "Death and Defying Death",
+   "wiki_warriors_death_para1": "Each warrior in a battle can receive a deadly blow. The chance is shown below, multiplied by %0.",
+@@ -11879,10 +11874,197 @@
+   "wiki_warriors_death_win": "Death chance if won",
+   "wiki_warriors_death_loss": "Death chance if lost",
+   "wiki_warriors_betrayal": "When Warriors Turn on You",
+-  "wiki_warriors_betrayal_para1": "Warriors can come back as named enemies in three ways: by Awakening, by deserting, or by retiring unhappy.",
+-  "wiki_warriors_betrayal_para2": "When you retire a warrior there is a %0 chance (doubled for Volatile, halved for Gentle) that she holds a grudge. She returns %1 days later.",
++  "wiki_warriors_betrayal_para1": "Warriors can come back as named enemies in four ways: by Awakening, by Awakening after they leave, by deserting, or by leaving bitter.",
++  "wiki_warriors_betrayal_para2": "A warrior who leaves bitter has a %0 chance (doubled for Volatile, halved for Gentle) to hold a grudge. She returns %1 days later.",
+   "wiki_warriors_betrayal_para3": "A deserter has a %0 chance (%1 if her loyalty was under 5, adjusted by temperament) of returning for revenge %2 days later.",
+   "wiki_warriors_betrayal_para4": "A returning warrior is %0 as strong as she would be if she had Awakened, and is fought with Hunt the Awakened.",
+   "wiki_warriors_hall": "Hall of the Fallen",
+-  "wiki_warriors_hall_para1": "Every warrior who falls, Awakens, deserts or retires is recorded in the Hall of the Fallen at the bottom of the warrior panel. The Hall is kept across all your runs."
++  "wiki_warriors_hall_para1": "Every warrior who falls, Awakens, deserts, retires, is dismissed or dies with honour is recorded in the Hall of the Fallen at the bottom of the warrior panel, with her service record. The Hall is kept across all your runs.",
++  "yoki_label_monsters": "Awakened: %0",
++  "yoki_label_strained": "A warrior is strained",
++  "yoki_label_tooltip": "Awakened Ones kill soldiers and add stress until they are hunted. Check your warriors in Civics, Military.",
++  "city_silent_hall": "Silent Hall",
++  "city_silent_hall_desc": "A quiet sanctuary where warriors rest and steady their minds.",
++  "city_silent_hall_effect": "Resting warriors calm down %0% faster (up to %1%).",
++  "city_silent_hall_effect2": "Lowers the most that rest can no longer undo by %0% of a warrior's limit (down to %1%).",
++  "city_silent_hall_upkeep": "Upkeep: $%0 per second. Unfunded halls have no effect.",
++  "city_silent_hall_unfunded": "%0 Silent Halls are not funded.",
++  "city_apothecary": "Apothecary",
++  "city_apothecary_desc": "Herbalists of the Organization brew Stillwater Tonic.",
++  "city_apothecary_effect": "Brews one Stillwater Tonic every %0 days. A tonic lowers one warrior's Awakening meter by %1.",
++  "city_apothecary_effect2": "Stores 2 tonics, plus 1 per Apothecary.",
++  "sw_warn_1": "%0's eyes flicker gold.",
++  "sw_warn_2": "%0 is strained. Her control is slipping.",
++  "sw_warn_short_1": "eyes flicker gold",
++  "sw_warn_short_2": "strained",
++  "sw_warn_short_3": "on the brink",
++  "sw_at_floor": "can't calm further",
++  "sw_card_msg": "%0 has sent you her Black Card. She asks to be put down while she is still herself.",
++  "sw_card_title": "Black Card",
++  "sw_card_text": "She is on the brink and asks to be put down.",
++  "sw_card_honour": "Honour it",
++  "sw_card_honour_tip": "She dies with honour. No monster, and her sisters gain loyalty.",
++  "sw_card_tonic": "Save: Tonic",
++  "sw_card_tonic_tip": "Use a Stillwater Tonic. %0% chance it fails and she slips further.",
++  "sw_card_rest": "Save: Rest",
++  "sw_card_rest_tip": "Send her to rest. %0% chance it is already too late.",
++  "sw_card_ignore": "Ignore",
++  "sw_card_ignore_tip": "She fights on and may Awaken. Her sisters lose loyalty.",
++  "sw_card_honoured": "%0 was granted her Black Card. She died as herself, and her sisters honour her.",
++  "sw_card_tonic_fail": "The tonic did not take. %0 slips further.",
++  "sw_card_saved": "%0 has been pulled back from the brink.",
++  "sw_card_too_late": "It was too late for %0.",
++  "sw_card_ignored": "You ignored %0's Black Card. Her sisters will remember.",
++  "sw_full": "FULL POWER",
++  "sw_full_btn": "Full Power",
++  "sw_full_tip": "Her bonuses x%0, but her Awakening meter fills %1 times as fast.",
++  "sw_full_on": "%0 releases her full power.",
++  "sw_handlers": "Handlers assigned",
++  "sw_handler_btn": "Assign Handler",
++  "sw_handler_off": "Remove Handler",
++  "sw_handler_on": "Handler assigned",
++  "sw_handler_tip": "An assigned Handler slows her Awakening meter by %0%. Needs a free Handler.",
++  "sw_tonic": "Stillwater Tonic",
++  "sw_tonic_btn": "Tonic",
++  "sw_tonic_tip": "Give her a Stillwater Tonic: Awakening meter -%0. Works even below the level rest can reach.",
++  "sw_tonic_used": "%0 drank a Stillwater Tonic and steadies herself.",
++  "sw_seat": "Seat",
++  "sw_seat_buy": "Commission a Seat",
++  "sw_seat_all": "All 8 Seats are commissioned.",
++  "sw_seat_free": "free",
++  "sw_seat_done": "Seat %0 of the Organization has been commissioned.",
++  "sw_seat_req_org": "build the Organization",
++  "sw_seat_req_iron": "research Iron Mining",
++  "sw_seat_req_hall": "build a Silent Hall",
++  "sw_seat_req_boot": "research Boot Camp",
++  "sw_seat_req_apoth": "build an Apothecary",
++  "sw_seat_req_electric": "research Electricity",
++  "sw_seat_req_industry": "research Industrialization",
++  "sw_seat_req_space": "launch your first space mission",
++  "sw_record": "Record",
++  "sw_close": "Close",
++  "sw_dismiss": "Dismiss",
++  "sw_dismiss_confirm": "Dismiss %0 without severance? Every other warrior loses about %1 loyalty (more for some temperaments). She would leave %2.",
++  "sw_dismissed": "%0 has been dismissed. She left %1.",
++  "sw_retire_poor": "You can't afford this yet.",
++  "sw_returned": "%0 has returned to the Organization as No. %1.",
++  "sw_former": "Former warrior",
++  "sw_vets": "Veterans",
++  "sw_vet_away": "away",
++  "sw_vet_restless": "restless",
++  "sw_mood_grateful": "grateful",
++  "sw_mood_neutral": "neutral",
++  "sw_mood_bitter": "bitter",
++  "sw_fate_honoured": "died with honour",
++  "sw_fate_dismissed": "dismissed",
++  "sw_fate_awakened_exile": "Awakened after leaving",
++  "sw_exile_awakened": "%0, who left your service %1 days ago, has Awakened. She now hunts your soldiers.",
++  "sw_wild_spawn": "A wild Awakened One has been sighted: %0. It hunts your soldiers.",
++  "sw_hunt_target_wild": "Target: %0, a wild Awakened One.",
++  "sw_hunt_wild_win": "%0 has been slain. %1 soldiers were killed and %2 were wounded. The bounty paid $%3.",
++  "sw_hunt_former": "Formerly No. %0, served %1 days.",
++  "sw_rec_summary": "Joined day %0 · served %1 days · %2 battles (%3 won) · %4 Awakened slain · defied death %5 times. Tap for her full record.",
++  "sw_rec_none": "No record kept.",
++  "sw_rec_rank": "Rank",
++  "sw_rec_rank_v": "No. %0 (joined as No. %1, best No. %2), level %3",
++  "sw_rec_service": "Service",
++  "sw_rec_service_v": "joined day %0, %1 days served, stints: %2",
++  "sw_rec_pay": "Pay",
++  "sw_rec_pay_v": "fees $%0, wages $%1, %2 days unpaid",
++  "sw_rec_rest": "Rest",
++  "sw_rec_rest_v": "%0 days rested over %1 rests",
++  "sw_rec_battles": "Battles",
++  "sw_rec_battles_v": "%0 (%1 won, %2 lost)",
++  "sw_rec_kills": "Slain",
++  "sw_rec_kills_v": "%0 Awakened, %1 named enemies, %2 former sisters",
++  "sw_rec_abyss": "Abyss",
++  "sw_rec_abyss_v": "%0 damage, %1 killing blows",
++  "sw_rec_trials": "Trials",
++  "sw_rec_trials_v": "%0 comrades lost, defied death %1 times, highest meter %2, lowest loyalty %3",
++  "sw_rec_stats": "Stats",
++  "sw_rec_chronicle": "Chronicle",
++  "sw_rec_day": "Day %0:",
++  "sw_ch_joined": "Joined the Organization as No. %0.",
++  "sw_ch_return": "Returned to service after %0 days away.",
++  "sw_ch_level": "Reached level %0 (No. %1).",
++  "sw_ch_strained": "Her control began to slip.",
++  "sw_ch_card": "Sent her Black Card.",
++  "sw_ch_honoured": "Her Black Card was honoured.",
++  "sw_ch_saved": "Pulled back from the brink.",
++  "sw_ch_ignored": "Her Black Card was ignored.",
++  "sw_ch_tonic": "Drank a Stillwater Tonic.",
++  "sw_ch_defied": "Defied death.",
++  "sw_ch_fell": "Fell in battle.",
++  "sw_ch_awakened": "Awakened.",
++  "sw_ch_exile_awakened": "Awakened %0 days after leaving.",
++  "sw_ch_comrade": "Lost her sister %0.",
++  "sw_ch_slew": "Slew %0.",
++  "sw_ch_slew_sister": "Slew her former sister %0.",
++  "sw_ch_abyss_blow": "Struck the killing blow against %0.",
++  "sw_ch_unpaid": "Went unpaid.",
++  "sw_ch_deserted": "Deserted.",
++  "sw_ch_retired": "Retired with honour, %0.",
++  "sw_ch_dismissed": "Dismissed, %0.",
++  "sw_epithet_0": "the Hollow-Eyed",
++  "sw_epithet_1": "the Many-Armed",
++  "sw_epithet_2": "the Bone Weaver",
++  "sw_epithet_3": "the Red Tide",
++  "sw_epithet_4": "the Silent Maw",
++  "sw_epithet_5": "the Gilded",
++  "sw_epithet_6": "of the Ninth Marsh",
++  "sw_epithet_7": "the Unsleeping",
++  "sw_epithet_8": "the Ash Crown",
++  "sw_epithet_9": "the Weeping Blade",
++  "sw_epithet_10": "of the Long Road",
++  "sw_epithet_11": "the Thousand Teeth",
++  "wiki_warriors_seats": "Seats",
++  "wiki_warriors_seats_para1": "There are %0 Seats. Each one past the first is a one-time Commission a Seat purchase, shown in the warrior panel once you reach its milestone.",
++  "wiki_warriors_seats_para2": "Older saves keep every warrior they already had: you start with at least as many Seats as warriors.",
++  "wiki_warriors_seat_req": "Milestone",
++  "wiki_warriors_seat_cost": "Cost",
++  "wiki_warriors_warn_at": "At",
++  "wiki_warriors_warn": "Warning",
++  "wiki_warriors_warn_1": "A message in the log.",
++  "wiki_warriors_warn_2": "A message, and a chronicle entry.",
++  "wiki_warriors_warn_3": "She sends you her Black Card.",
++  "wiki_warriors_floor": "The Rising Floor",
++  "wiki_warriors_floor_para1": "Every warrior has a floor that rest can't take her meter below. It is %0 of her breaking point for each level above 1, plus %1 for each death she has defied, up to %2.",
++  "wiki_warriors_floor_para2": "Each funded Silent Hall lowers that cap by %0, down to %1. A Stillwater Tonic works even below the floor.",
++  "wiki_warriors_full": "Full Power",
++  "wiki_warriors_full_para1": "An active warrior can fight at Full Power. All her bonuses are multiplied by %0, but her meter fills %1 times as fast. Resting her ends Full Power. This is the biggest risk you can take with a warrior.",
++  "wiki_warriors_card": "The Black Card",
++  "wiki_warriors_card_para1": "When a warrior is on the brink, she sends you her Black Card and asks to be put down while she is still herself. The card appears on her panel until you answer it or her meter falls back.",
++  "wiki_warriors_card_para2": "Honour it: she dies with honour, no monster appears, and every other warrior gains %0 loyalty. Save her with a Tonic: %1 chance it fails and she slips further. Save her with rest: %2 chance it is already too late and she Awakens.",
++  "wiki_warriors_card_para3": "Ignore it: she keeps fighting, and every other warrior loses %0 loyalty. If she Awakens with her card still unanswered, her sisters take it harder.",
++  "wiki_warriors_calming": "Keeping Warriors Stable",
++  "wiki_warriors_calming_para1": "These all slow or undo the Awakening meter.",
++  "wiki_warriors_calm_handler": "Assign one to a warrior in her panel: her meter fills %0% slower. Each Handler is one worker, and you can have one per Organization.",
++  "wiki_warriors_calm_org": "Each one makes every warrior's meter fill %0% slower, up to %1%.",
++  "wiki_warriors_calm_hall": "Each one makes resting %0% more effective (up to %1%) and lowers the floor cap by %2%. Costs $%3 per second. Unfunded halls do nothing.",
++  "wiki_warriors_calm_apoth": "Each one brews a Stillwater Tonic every %0 days. A tonic lowers one warrior's meter by %1. Stores %2 tonics, plus 1 per Apothecary.",
++  "wiki_warriors_calm_abyss": "A higher rank of Demon Power makes meters fill slower, and each Abyssal One slain makes them 10% slower for the rest of the run.",
++  "wiki_warriors_wild": "Wild Awakened Ones",
++  "wiki_warriors_wild_para1": "Once you build the Organization, wild Awakened Ones roam the land. Each has her own name and gets stronger with each era. They kill soldiers and add stress until you hunt them.",
++  "wiki_warriors_wild_para2": "They appear %0 as often on Monster-infested planets, and more often as your warriors grow famous: up to %2 as often once your roster has %1 levels in total.",
++  "wiki_warriors_wild_para3": "At most %0 wild Awakened Ones can be at large at once.",
++  "wiki_warriors_era": "Era",
++  "wiki_warriors_era_freq": "Average time between sightings",
++  "wiki_warriors_era_days": "%0 days (about %1 minutes)",
++  "wiki_warriors_era_0": "Before Electricity",
++  "wiki_warriors_era_2": "Electricity",
++  "wiki_warriors_era_5": "Later industry",
++  "wiki_warriors_era_8": "Space age",
++  "wiki_warriors_record": "Service Record",
++  "wiki_warriors_record_para1": "Every warrior keeps a service record: days served, pay, rests, battles won and lost, Awakened and named enemies slain, Abyssal damage, comrades lost, deaths defied, her highest meter, lowest loyalty, and how her stats grew.",
++  "wiki_warriors_record_para2": "Her chronicle keeps her last %0 notable moments. Hover over her name for a summary, or tap her name or Record for the full record. The record goes with her to the Hall when she leaves.",
++  "wiki_warriors_leaving": "Leaving the Organization",
++  "wiki_warriors_leaving_para1": "Retire: she leaves with honour. You pay severance of her daily wage x (%0), plus any back pay.",
++  "wiki_warriors_leaving_para2": "Dismiss: free, but every other warrior loses %0 loyalty (up to %1, adjusted by temperament).",
++  "wiki_warriors_leaving_para3": "She leaves Grateful, Neutral or Bitter, based on her loyalty, days served, unpaid days, comrades lost, and whether you retired or dismissed her.",
++  "wiki_warriors_leaving_para4": "Former warriors are listed as Veterans. After %0 days away, a Grateful or Neutral veteran may return to the recruit pool (%1 chance each time it refreshes) as a Former warrior: at half fee if Grateful. She keeps her level, stats, perks and record. Bitter veterans and deserters never come back as recruits.",
++  "wiki_warriors_leaving_para5": "Her meter keeps changing after she leaves. It usually falls, but if she left above %0 of her breaking point it may keep rising, and she can Awaken in exile.",
++  "wiki_warriors_days_served": "days served",
++  "wiki_structure_planetary_silent_hall": "Helps warriors recover from their Awakening meter while resting, and lowers the most that rest can't undo. Needs Money every second to work. Building the first one unlocks Seat 3. See Gameplay, Warriors.",
++  "wiki_structure_planetary_apothecary": "Brews Stillwater Tonic, which lowers one warrior's Awakening meter, even below the level rest can reach. Building the first one unlocks Seat 5. See Gameplay, Warriors.",
++  "wiki_warriors_awakening_para4": "You can't see her breaking point, but she warns you as she nears it. The thresholds below are shares of her own breaking point."
+ }
+-- 
+2.43.0
+
